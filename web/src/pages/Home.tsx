@@ -1,23 +1,21 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useStore } from "../store";
 import { money, monthKey, monthLabel, round2 } from "../lib/format";
 import { buildInsights, type Insight } from "../lib/insights";
 import { byCategory, expenses, inMonth, monthBounds, monthToDate, previousMonthKey, sum, totalOwed } from "../lib/stats";
 import { sampleInbox } from "../lib/samples";
 import { splitInbox } from "../lib/actions";
-import { SegmentBar, type Segment } from "../components/charts/SegmentBar";
+import { DonutChart } from "../components/charts/DonutChart";
+import type { ColorKey } from "../../../shared/types";
 import { Meter } from "../components/charts/Meter";
 import { InsightCard } from "../components/InsightCard";
 import { TxnList } from "../components/TxnList";
 import type { Nav } from "../App";
 
-function greeting(now: Date) {
-  const h = now.getHours();
-  return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-}
 
 export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
   const { data, categories, currency, pending, ingest, toast } = useStore();
+  const [active, setActive] = useState<string | null>(null);
   const now = new Date();
   const key = monthKey(now);
   const day = now.getDate();
@@ -34,9 +32,14 @@ export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
     const today = sum(list.filter((t) => new Date(t.received_at) >= startToday));
     const week = sum(list.filter((t) => new Date(t.received_at) >= startWeek));
     const cats = byCategory(month, categories);
-    const top = cats.slice(0, 5);
-    const rest = round2(cats.slice(5).reduce((a, c) => a + c.total, 0));
-    const parts: Segment[] = top.map((c) => ({ key: c.id, label: c.category?.name ?? "Uncategorized", value: c.total, color: c.category?.color ?? "gray" }));
+    const top = cats.slice(0, 6);
+    const rest = round2(cats.slice(6).reduce((a, c) => a + c.total, 0));
+    const parts: { key: string; label: string; value: number; color: ColorKey }[] = top.map((c) => ({
+      key: c.id,
+      label: c.category ? `${c.category.emoji} ${c.category.name}` : "🏷️ Uncategorized",
+      value: c.total,
+      color: c.category?.color ?? "gray",
+    }));
     if (rest > 0) parts.push({ key: "rest", label: "Everything else", value: rest, color: "gray" });
     const budget = categories.reduce((a, c) => a + (c.budget ?? 0), 0);
     const owed = totalOwed(data.transactions.filter((t) => t.currency === currency));
@@ -61,11 +64,7 @@ export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
   return (
     <>
       <section className="hero">
-        <div className="hero-top">
-          <span>{greeting(now)}{data.profile?.name ? `, ${data.profile.name}` : ""} 👋</span>
-          <span className="hero-month">{monthLabel(key)}</span>
-        </div>
-        <div className="hero-label">You've spent</div>
+        <div className="hero-label">Spent in {monthLabel(key)}</div>
         <div className="hero-value">{money(s.total, currency)}</div>
         <div className="hero-delta">
           {delta == null ? (
@@ -131,23 +130,30 @@ export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
         <div className="card">
           <div className="spread">
             <h2>Where it went</h2>
-            <button className="linkbtn small" onClick={() => nav("insights", "categories")}>Details ›</button>
+            <button className="linkbtn small" onClick={() => nav("insights", "breakdown")}>Breakdown ›</button>
           </div>
-          <SegmentBar parts={s.parts} ariaLabel="Spending by category this month" />
-          <ul className="legend-list">
-            {s.parts.map((p) => {
-              const c = s.cats.find((x) => x.id === p.key)?.category;
-              const share = s.total ? Math.round((p.value / s.total) * 100) : 0;
-              return (
+          <div className="home-donut">
+            <DonutChart
+              size={184}
+              ariaLabel="Spending by category this month"
+              slices={s.parts.map((p) => ({ key: p.key, label: p.label, value: p.value, color: `var(--c-${p.color})` }))}
+              format={(n) => money(n, currency)}
+              centerTitle="This month"
+              active={active}
+              onActive={setActive}
+            />
+            <ul className="legend-list compact">
+              {s.parts.map((p) => (
                 <li key={p.key}>
-                  <span className="swatch" style={{ background: `var(--c-${p.color})` }} aria-hidden />
-                  <span className="grow">{c ? `${c.emoji} ${c.name}` : p.label}</span>
-                  <span className="tnum strong">{money(p.value, currency)}</span>
-                  <span className="tnum muted pct">{share}%</span>
+                  <button className={`legend-row${active === p.key ? " on" : ""}`} onClick={() => setActive(active === p.key ? null : p.key)}>
+                    <span className="swatch" style={{ background: `var(--c-${p.color})` }} aria-hidden />
+                    <span className="grow">{p.label}</span>
+                    <span className="tnum muted pct">{s.total ? Math.round((p.value / s.total) * 100) : 0}%</span>
+                  </button>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 

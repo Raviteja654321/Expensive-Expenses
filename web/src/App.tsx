@@ -20,12 +20,12 @@ const TABS: { key: Tab; label: string; icon: string; title: string }[] = [
   { key: "categories", label: "Budgets", icon: "🏷️", title: "Categories" },
   { key: "settings", label: "Settings", icon: "⚙️", title: "Settings" },
 ];
-const VIEWS: InsightView[] = ["trends", "categories", "calendar", "merchants", "friends", "tips"];
+const VIEWS: InsightView[] = ["breakdown", "trends", "categories", "calendar", "merchants", "friends", "tips"];
 
 function parseHash(): { tab: Tab; view: InsightView } {
   const [t, v] = location.hash.replace(/^#\/?/, "").split("/");
   const tab = (TABS.some((x) => x.key === t) ? t : "home") as Tab;
-  const view = (VIEWS.includes(v as InsightView) ? v : "trends") as InsightView;
+  const view = (VIEWS.includes(v as InsightView) ? v : "breakdown") as InsightView;
   return { tab, view };
 }
 
@@ -87,9 +87,9 @@ function Main() {
   }, []);
 
   const nav: Nav = useCallback((t, v) => {
-    const hash = t === "home" ? "" : t === "insights" ? `#/insights/${v ?? "trends"}` : `#/${t}`;
+    const hash = t === "home" ? "" : t === "insights" ? `#/insights/${v ?? "breakdown"}` : `#/${t}`;
     history.pushState(null, "", `${location.pathname}${hash}`);
-    setRoute({ tab: t, view: v ?? "trends" });
+    setRoute({ tab: t, view: v ?? "breakdown" });
     window.scrollTo({ top: 0 });
   }, []);
 

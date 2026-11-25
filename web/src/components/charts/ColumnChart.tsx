@@ -7,6 +7,8 @@ export interface Column {
   title: string; // tooltip heading, e.g. "Tue 24 Nov"
   value: number;
   emphasis?: boolean;
+  /** Stacked parts (e.g. per category), largest first. Drawn bottom-up. */
+  segments?: { key: string; label: string; value: number; color: string }[];
 }
 
 /** Vertical bars from one baseline. Tap or hover a bar for its value. */
@@ -64,7 +66,8 @@ export function ColumnChart({
           const cls = emphasisMode ? (d.emphasis ? "bar" : "bar muted-bar") : "bar";
           return (
             <g key={d.key}>
-              {h > 0 && <path d={columnPath(x, y(d.value), barW, h)} className={`${cls}${active === i ? " on" : ""}`} />}
+              {h > 0 && !d.segments?.length && <path d={columnPath(x, y(d.value), barW, h)} className={`${cls}${active === i ? " on" : ""}`} />}
+              {h > 0 && d.segments?.length ? <Stack x={x} w={barW} base={y(0)} segments={d.segments} scale={(v) => (v / nice) * plotH} on={active === i} /> : null}
               <rect
                 x={axisW + slot * i}
                 y={top}
@@ -99,12 +102,46 @@ export function ColumnChart({
         )}
       </svg>
       {a && (
-        <div className="tip" style={{ left: Math.min(Math.max(ax, 70), width - 70), top: Math.max(0, y(a.value) - 52) }}>
+        <div className="tip" style={{ left: Math.min(Math.max(ax, 80), width - 80), top: Math.max(0, y(a.value) - (a.segments?.length ? 40 + Math.min(5, a.segments.length) * 18 : 52)) }}>
           <strong>{format(a.value)}</strong>
           <span>{a.title}</span>
+          {a.segments && a.segments.length > 0 && (
+            <ul className="tip-list">
+              {a.segments.slice(0, 5).map((sg) => (
+                <li key={sg.key}>
+                  <i style={{ background: sg.color }} />
+                  <span>{sg.label}</span>
+                  <b>{format(sg.value)}</b>
+                </li>
+              ))}
+              {a.segments.length > 5 && <li className="more">+{a.segments.length - 5} more</li>}
+            </ul>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Stacked parts with a 1.5px surface gap; only the top part gets the rounded end. */
+function Stack({ x, w, base, segments, scale, on }: { x: number; w: number; base: number; segments: NonNullable<Column["segments"]>; scale: (v: number) => number; on: boolean }) {
+  let yTop = base;
+  const parts = [...segments].filter((s) => s.value > 0);
+  return (
+    <g className={on ? "stack on" : "stack"}>
+      {parts.map((sg, i) => {
+        const h = scale(sg.value);
+        const y0 = yTop - h;
+        yTop = y0;
+        const gap = i > 0 ? 1.5 : 0;
+        const hh = Math.max(0, h - gap);
+        return i === parts.length - 1 ? (
+          <path key={sg.key} d={columnPath(x, y0, w, hh)} fill={sg.color} />
+        ) : (
+          <rect key={sg.key} x={x} y={y0} width={w} height={hh} fill={sg.color} />
+        );
+      })}
+    </g>
   );
 }
 

@@ -8,6 +8,8 @@ export interface HBar {
   sub?: ReactNode;
   /** Optional swatch colour (CSS value) shown before the label for identity. */
   swatch?: string;
+  /** Bar colour (CSS value); defaults to the single data hue. */
+  color?: string;
   onClick?: () => void;
 }
 
@@ -27,7 +29,7 @@ export function HBars({ rows, max }: { rows: HBar[]; max?: number }) {
               <span className="val tnum">{r.valueText}</span>
             </div>
             <div className="track" aria-hidden>
-              <div className="fill" style={{ width: `${m ? Math.max(1.5, (r.value / m) * 100) : 0}%` }} />
+              <div className="fill" style={{ width: `${m ? Math.max(1.5, (r.value / m) * 100) : 0}%`, background: r.color }} />
             </div>
             {r.sub && <div className="sub">{r.sub}</div>}
           </>

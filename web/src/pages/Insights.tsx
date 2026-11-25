@@ -8,6 +8,9 @@ import {
   totalOwed, weekdayAverages, type CatTotal,
 } from "../lib/stats";
 import { settleFriend } from "../lib/actions";
+import { categoryBuckets, inRange, parseYmd, presetRange, rangeDays, type DateRange } from "../lib/range";
+import { DonutChart } from "../components/charts/DonutChart";
+import { DateRangePicker } from "../components/DateRangePicker";
 import { ColumnChart } from "../components/charts/ColumnChart";
 import { HBars } from "../components/charts/HBars";
 import { Heatmap } from "../components/charts/Heatmap";
@@ -17,8 +20,9 @@ import { Modal } from "../components/Modal";
 import { MonthSwitch } from "../components/MonthSwitch";
 import { TxnList } from "../components/TxnList";
 
-export type InsightView = "trends" | "categories" | "calendar" | "merchants" | "friends" | "tips";
+export type InsightView = "breakdown" | "trends" | "categories" | "calendar" | "merchants" | "friends" | "tips";
 const VIEWS: { key: InsightView; label: string }[] = [
+  { key: "breakdown", label: "🥧 Breakdown" },
   { key: "trends", label: "📈 Trends" },
   { key: "categories", label: "🏷️ Categories" },
   { key: "calendar", label: "🗓️ Calendar" },
@@ -48,24 +52,125 @@ export function Insights({ view, setView }: { view: InsightView; setView: (v: In
           </button>
         ))}
       </div>
-      {view !== "friends" && view !== "tips" && (
+      {view !== "friends" && view !== "tips" && view !== "breakdown" && (
         <div className="filter-row">
           <MonthSwitch value={month} onChange={setMonth} />
           <span className="small muted tnum">{fmt(sum(monthList))} · {monthList.length} expenses</span>
         </div>
       )}
 
+      {view === "breakdown" && <Breakdown list={list} fmt={fmt} />}
       {view === "trends" && <Trends list={list} month={month} monthList={monthList} fmt={fmt} currency={currency} />}
       {view === "categories" && <CategoriesView list={list} month={month} monthList={monthList} fmt={fmt} currency={currency} />}
       {view === "calendar" && <CalendarView month={month} monthList={monthList} fmt={fmt} />}
       {view === "merchants" && <MerchantsView monthList={monthList} fmt={fmt} />}
       {view === "friends" && <FriendsView fmt={fmt} />}
       {view === "tips" && <TipsView onOpen={(l) => setView(l === "trends" ? "trends" : l)} />}
-      {view !== "friends" && view !== "tips" && list.length === 0 && (
+      {view !== "friends" && view !== "tips" && view !== "breakdown" && list.length === 0 && (
         <div className="card empty">
           <div className="big">📊</div>
           <p>Charts appear here once you've reviewed a few expenses.</p>
         </div>
+      )}
+    </>
+  );
+}
+
+// ---------------- Breakdown (pie by category for any date range) ----------------
+const rangeText = (r: DateRange) => {
+  const f = parseYmd(r.from);
+  const t = parseYmd(r.to);
+  const sameYear = f.getFullYear() === t.getFullYear();
+  const a = f.toLocaleDateString(undefined, { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" });
+  const b = t.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return r.from === r.to ? b : `${a} – ${b}`;
+};
+
+function Breakdown({ list, fmt }: { list: Transaction[]; fmt: (n: number) => string }) {
+  const { categories, currency } = useStore();
+  const earliest = useMemo(() => list.reduce<string | null>((m, t) => (!m || t.received_at < m ? t.received_at : m), null), [list]);
+  const [range, setRange] = useState<DateRange>(() => presetRange("this-month", new Date()));
+  const [active, setActive] = useState<string | null>(null);
+  const items = useMemo(() => inRange(list, range), [list, range]);
+  const total = sum(items);
+  const cats = byCategory(items, categories);
+  const days = rangeDays(range);
+  const buckets = useMemo(() => categoryBuckets(list, categories, range), [list, categories, range]);
+  const label = (c: CatTotal) => (c.category ? `${c.category.emoji} ${c.category.name}` : "🏷️ Uncategorized");
+  const color = (c: CatTotal) => `var(--c-${c.category?.color ?? "gray"})`;
+
+  return (
+    <>
+      <DateRangePicker value={range} earliest={earliest} onChange={(r) => { setRange(r); setActive(null); }} />
+      <p className="range-label small muted">{rangeText(range)} · {items.length} expense{items.length === 1 ? "" : "s"}</p>
+
+      {items.length === 0 ? (
+        <div className="card empty">
+          <div className="big">🥧</div>
+          <p>No expenses in this date range.</p>
+        </div>
+      ) : (
+        <>
+          <div className="kpi-grid">
+            <div className="kpi"><span>Spent</span><strong>{fmt(total)}</strong></div>
+            <div className="kpi"><span>Daily average</span><strong>{fmt(Math.round(total / days))}</strong><small>over {days} day{days === 1 ? "" : "s"}</small></div>
+          </div>
+
+          <div className="card">
+            <h2>Where your money went</h2>
+            <div className="donut-wrap">
+              <DonutChart
+                ariaLabel={`Spending by category, ${rangeText(range)}`}
+                slices={cats.map((c) => ({ key: c.id, label: label(c), value: c.total, color: color(c), sub: `${c.count} expense${c.count === 1 ? "" : "s"}` }))}
+                format={fmt}
+                centerTitle="Total spent"
+                active={active}
+                onActive={setActive}
+              />
+            </div>
+            <ul className="legend-list">
+              {cats.map((c) => (
+                <li key={c.id}>
+                  <button
+                    className={`legend-row${active === c.id ? " on" : ""}`}
+                    onPointerEnter={(e) => e.pointerType === "mouse" && setActive(c.id)}
+                    onPointerLeave={(e) => e.pointerType === "mouse" && setActive(null)}
+                    onClick={() => setActive(active === c.id ? null : c.id)}
+                  >
+                    <span className="swatch" style={{ background: color(c) }} aria-hidden />
+                    <span className="grow">{label(c)}</span>
+                    <span className="tnum strong">{fmt(c.total)}</span>
+                    <span className="tnum muted pct">{total ? `${Math.round((c.total / total) * 1000) / 10}%` : ""}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="card">
+            <h2>By category</h2>
+            <HBars
+              rows={cats.map((c) => ({
+                key: c.id,
+                label: label(c),
+                value: c.total,
+                color: color(c),
+                valueText: fmt(c.total),
+                sub: `${c.count} expense${c.count === 1 ? "" : "s"} · avg ${fmt(Math.round(c.total / c.count))}`,
+              }))}
+            />
+          </div>
+
+          <div className="card">
+            <h2>{Math.round((parseYmd(range.to).getTime() - parseYmd(range.from).getTime()) / 86_400_000) + 1 <= 62 ? "Day by day" : "Month by month"}</h2>
+            <ColumnChart
+              ariaLabel={`Spending over time by category, ${rangeText(range)}`}
+              data={buckets.map((b) => ({ key: b.key, label: b.label, title: b.title, value: b.total, segments: b.segments }))}
+              format={fmt}
+              formatAxis={(n) => moneyShort(n, currency)}
+            />
+          </div>
+        </>
       )}
     </>
   );
@@ -83,6 +188,12 @@ function Trends({ list, month, monthList, fmt, currency }: { list: Transaction[]
   const noSpend = daily.slice(0, elapsed).filter((v) => v === 0).length;
   const months = monthTotals(list, month, 6);
   const weekday = weekdayAverages(list, isNow ? new Date() : new Date(y, m, 0, 23, 59));
+  const { categories } = useStore();
+  const lastDay = new Date(y, m, 0).getDate();
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const dayBuckets = categoryBuckets(list, categories, { preset: "custom", from: `${month}-01`, to: `${month}-${pad2(lastDay)}` });
+  const startKey = monthKey(new Date(y, m - 6, 1));
+  const monthBuckets = categoryBuckets(list, categories, { preset: "custom", from: `${startKey}-01`, to: `${month}-${pad2(lastDay)}` }).slice(-6);
   const avgMonth = Math.round(months.reduce((a, b) => a + b.total, 0) / Math.max(1, months.filter((x) => x.total > 0).length));
 
   return (
@@ -98,12 +209,7 @@ function Trends({ list, month, monthList, fmt, currency }: { list: Transaction[]
         <h2>Daily spending</h2>
         <ColumnChart
           ariaLabel={`Daily spending in ${monthLabel(month)}`}
-          data={daily.map((v, i) => ({
-            key: String(i),
-            label: i === 0 || (i + 1) % 5 === 0 ? String(i + 1) : "",
-            title: new Date(y, m - 1, i + 1).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
-            value: v,
-          }))}
+          data={dayBuckets.map((b) => ({ key: b.key, label: b.label, title: b.title, value: b.total, segments: b.segments }))}
           reference={avg}
           referenceLabel={`avg ${moneyShort(avg, currency)}`}
           format={fmt}
@@ -125,8 +231,7 @@ function Trends({ list, month, monthList, fmt, currency }: { list: Transaction[]
         <h2>Last 6 months</h2>
         <ColumnChart
           ariaLabel="Monthly totals for the last 6 months"
-          emphasisMode
-          data={months.map((x) => ({ key: x.key, label: shortMonth(x.key), title: monthLabel(x.key), value: x.total, emphasis: x.key === month }))}
+          data={monthBuckets.map((b) => ({ key: b.key, label: shortMonth(b.key.slice(0, 7)), title: b.title, value: b.total, segments: b.segments }))}
           reference={avgMonth}
           referenceLabel={`avg ${moneyShort(avgMonth, currency)}`}
           format={fmt}
@@ -173,6 +278,7 @@ function CategoriesView({ list, month, monthList, fmt, currency }: { list: Trans
               return {
                 key: c.id,
                 swatch: `var(--c-${c.category?.color ?? "gray"})`,
+                color: `var(--c-${c.category?.color ?? "gray"})`,
                 label: c.category ? `${c.category.emoji} ${c.category.name}` : "🏷️ Uncategorized",
                 value: c.total,
                 valueText: `${fmt(c.total)} · ${total ? Math.round((c.total / total) * 100) : 0}%`,
