@@ -1,19 +1,21 @@
 const fmtCache = new Map<string, Intl.NumberFormat>();
 
+/** ₹1,250 for whole amounts, ₹1,250.50 (always two decimals) otherwise. */
 export function money(amount: number | null | undefined, currency = "INR"): string {
-  const n = amount ?? 0;
-  const key = currency;
+  const n = Math.round((amount ?? 0) * 100) / 100;
+  const digits = Number.isInteger(n) ? 0 : 2;
+  const key = `${currency}:${digits}`;
   let f = fmtCache.get(key);
   if (!f) {
     try {
       f = new Intl.NumberFormat(currency === "INR" ? "en-IN" : undefined, {
         style: "currency",
         currency,
-        maximumFractionDigits: 2,
-        minimumFractionDigits: 0,
+        maximumFractionDigits: digits,
+        minimumFractionDigits: digits,
       });
     } catch {
-      f = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+      f = new Intl.NumberFormat(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits });
     }
     fmtCache.set(key, f);
   }

@@ -117,3 +117,14 @@ describe("backup", () => {
     expect(() => validateBackup({ hello: 1 })).toThrow();
   });
 });
+
+import { money } from "../web/src/lib/format";
+
+describe("money", () => {
+  it("shows whole amounts without decimals and others with exactly two", () => {
+    expect(money(1250, "INR")).toBe("₹1,250");
+    expect(money(4407.5, "INR")).toBe("₹4,407.50");
+    expect(money(123456.789, "INR")).toBe("₹1,23,456.79");
+    expect(money(6.45, "USD")).toBe("$6.45");
+  });
+});

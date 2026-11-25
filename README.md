@@ -61,7 +61,7 @@ tests/             vitest suites
 
 ```bash
 npm install
-npm test           # 53 tests: parser, dates, import/review/backup, insights
+npm test           # 54 tests: parser, dates, import/review/backup, insights, formatting
 npm run dev        # http://localhost:5173
 npm run build      # static site in web/dist
 ```
