@@ -8,11 +8,11 @@ const fresh = () => createProfile(emptyData(), { name: "Ravi", currency: "INR" }
 // Shaped like Notion's "Export → Markdown & CSV" of a database.
 const NOTION_CSV =
   "﻿Expense,Amount,Category,Date\n" +
-  'Rent,"₹17,510",Housing,"September 1, 2025"\n' +
+  'Rent,"₹12,000",Housing,"September 1, 2025"\n' +
   "Auto,₹30,Transportation,\"September 1, 2025\"\n" +
   "Auto,₹30,Transportation,\"September 1, 2025\"\n" +
   'Movie,₹450,"Weekend, Entertainment","September 6, 2025"\n' +
-  '"Lunch, office",₹83,Daily Food,"September 8, 2025 → September 9, 2025"\n' +
+  '"Lunch, office",₹95,Daily Food,"September 8, 2025 → September 9, 2025"\n' +
   "Blank,,,\n" +
   "Refund,-200,Shopping,\"September 9, 2025\"\n";
 
@@ -36,7 +36,7 @@ describe("CSV parsing", () => {
     ["yesterday", null],
   ])("date %s", (input, out) => expect(parseLooseDate(input)).toBe(out));
   it.each([
-    ["₹17,510", 17510],
+    ["₹12,000", 12000],
     ["1,23,456.50", 123456.5],
     ["Rs. 99", 99],
     ["", null],
@@ -50,7 +50,7 @@ describe("Notion import", () => {
     const p = previewCsv(NOTION_CSV);
     expect(p.rows).toHaveLength(5);
     expect(p.skipped).toBe(2);
-    expect([p.from, p.to, p.total]).toEqual(["2025-09-01", "2025-09-08", 18103]);
+    expect([p.from, p.to, p.total]).toEqual(["2025-09-01", "2025-09-08", 12605]);
     expect(p.rows[3].categories).toEqual(["Weekend", "Entertainment"]);
     expect(p.rows[4].title).toBe("Lunch, office");
   });
