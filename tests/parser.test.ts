@@ -146,3 +146,22 @@ describe("suggestCategoryName", () => {
     expect(merchantKey("STARBUCKS STORE 123")).toBe(merchantKey("Starbucks Store #456"));
   });
 });
+
+import { extractDate } from "../shared/parser";
+
+describe("extractDate", () => {
+  it.each([
+    ["Spent Rs.1,299.00 On HDFC Bank Card 1234 At AMAZON On 2026-11-24:18:30:12.Not You?", "INR", { y: 2026, m: 11, d: 24, hh: 18, mm: 30 }],
+    ["INR 450.00 spent using ICICI Bank Card XX1234 on 24-Nov-26 on ZOMATO LTD.", "INR", { y: 2026, m: 11, d: 24, hh: null, mm: null }],
+    ["A/C X1234 debited by 75.0 on date 24Nov26 trf to RAPIDO Refno 4321", null, { y: 2026, m: 11, d: 24, hh: null, mm: null }],
+    ["INR 2000.00 debited\nA/c no. XX1234\n24-11-26, 18:30:12\nUPI/P2M/4321/PVR", "INR", { y: 2026, m: 11, d: 24, hh: 18, mm: 30 }],
+    ["Sent Rs.250.00\nFrom HDFC Bank A/C *1234\nTo SWIGGY\nOn 03/11/26\nRef 4321", "INR", { y: 2026, m: 11, d: 3, hh: null, mm: null }],
+    ["Chase: You made a $45.67 transaction with STARBUCKS on Nov 24, 2026 at 6:30 PM ET.", "USD", { y: 2026, m: 11, d: 24, hh: 18, mm: 30 }],
+    ["Card ending 1234 charged $12.00 on 11/03/2026 at TARGET", "USD", { y: 2026, m: 11, d: 3, hh: null, mm: null }],
+  ])("%s", (sms, cur, expected) => {
+    expect(extractDate(sms, cur, 2026)).toEqual(expected);
+  });
+  it("returns null when there is no date", () => {
+    expect(extractDate("Rs 99 debited to SPOTIFY. Call 18002586161", "INR", 2026)).toBeNull();
+  });
+});

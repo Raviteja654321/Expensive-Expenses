@@ -177,3 +177,72 @@ export function splitMessages(text: string): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
 }
+
+export interface SmsDate {
+  y: number;
+  m: number; // 1-12
+  d: number;
+  hh: number | null;
+  mm: number | null;
+}
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const MON = String.raw`(jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)[a-z]*\.?`;
+const ISO_DATE_RE = /\b(20\d{2})-(\d{1,2})-(\d{1,2})(?:[ T:,]+(\d{1,2}):(\d{2})(?::\d{2})?)?/;
+const MON_D_Y_RE = new RegExp(String.raw`\b${MON}\s+(\d{1,2}),?\s+(20\d{2})\b`, "i");
+const D_MON_Y_RE = new RegExp(String.raw`\b(\d{1,2})[-\s]?${MON}(?:[-\s,]?(\d{4}|\d{2}))?(?![a-z0-9])`, "i");
+const NUMERIC_RE = /\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})\b/;
+const TIME_RE = /\b(\d{1,2}):(\d{2})(?::\d{2})?\s*(am|pm)?\b/i;
+
+const year = (s: string | undefined, fallback: number) => (!s ? fallback : s.length === 2 ? 2000 + Number(s) : Number(s));
+const monthIndex = (s: string) => MONTHS.indexOf(s.toLowerCase().slice(0, 3)) + 1;
+
+function timeAfter(text: string, from: number): { hh: number; mm: number } | null {
+  const t = TIME_RE.exec(text.slice(from, from + 40));
+  if (!t) return null;
+  let hh = Number(t[1]);
+  const mm = Number(t[2]);
+  const ap = t[3]?.toLowerCase();
+  if (ap === "pm" && hh < 12) hh += 12;
+  if (ap === "am" && hh === 12) hh = 0;
+  return hh < 24 && mm < 60 ? { hh, mm } : null;
+}
+
+/**
+ * Finds the transaction date printed in a bank SMS, if any.
+ * Numeric dates are read day-first (Indian banks) unless the amount is in USD.
+ */
+export function extractDate(text: string, currency: string | null, thisYear = new Date().getFullYear()): SmsDate | null {
+  const ok = (y: number, m: number, d: number) => y >= 2000 && y <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31;
+  const build = (y: number, m: number, d: number, at: number, own?: { hh: number; mm: number } | null): SmsDate | null => {
+    if (!ok(y, m, d)) return null;
+    const t = own ?? timeAfter(text, at);
+    return { y, m, d, hh: t?.hh ?? null, mm: t?.mm ?? null };
+  };
+
+  let r = ISO_DATE_RE.exec(text);
+  if (r) {
+    const own = r[4] != null ? { hh: Number(r[4]), mm: Number(r[5]) } : null;
+    const res = build(Number(r[1]), Number(r[2]), Number(r[3]), r.index + r[0].length, own);
+    if (res) return res;
+  }
+  r = MON_D_Y_RE.exec(text);
+  if (r) {
+    const res = build(Number(r[3]), monthIndex(r[1]), Number(r[2]), r.index + r[0].length);
+    if (res) return res;
+  }
+  r = D_MON_Y_RE.exec(text);
+  if (r) {
+    const res = build(year(r[3], thisYear), monthIndex(r[2]), Number(r[1]), r.index + r[0].length);
+    if (res) return res;
+  }
+  r = NUMERIC_RE.exec(text);
+  if (r) {
+    const a = Number(r[1]);
+    const b = Number(r[2]);
+    const [d, m] = currency === "USD" ? [b, a] : [a, b];
+    const res = build(year(r[3], thisYear), m, d, r.index + r[0].length);
+    if (res) return res;
+  }
+  return null;
+}
