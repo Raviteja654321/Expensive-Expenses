@@ -1,163 +1,131 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Transaction } from "../../shared/types";
-import { api, getToken, setToken, setUnauthorizedHandler } from "./api";
-import { AppProvider, useApp } from "./context";
-import { Categories } from "./components/Categories";
-import { Dashboard } from "./components/Dashboard";
-import { Lock } from "./components/Lock";
+import { StoreProvider, useStore } from "./store";
+import { Onboarding } from "./components/Onboarding";
 import { ReviewQueue } from "./components/ReviewQueue";
-import { SettingsPage } from "./components/Settings";
+import { Home } from "./pages/Home";
+import { Insights, type InsightView } from "./pages/Insights";
+import { Activity } from "./pages/Activity";
+import { CategoriesPage } from "./pages/CategoriesPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
-type Tab = "home" | "categories" | "settings";
-const TITLES: Record<Tab, string> = { home: "Expenses", categories: "Categories", settings: "Settings" };
+type Tab = "home" | "insights" | "activity" | "categories" | "settings";
+export type Nav = (tab: Tab, view?: InsightView) => void;
 
-const tabFromHash = (): Tab => {
-  const h = location.hash.replace(/^#\/?/, "");
-  return h === "categories" || h === "settings" ? h : "home";
-};
+const TABS: { key: Tab; label: string; icon: string; title: string }[] = [
+  { key: "home", label: "Home", icon: "🏠", title: "Overview" },
+  { key: "insights", label: "Insights", icon: "📊", title: "Insights" },
+  { key: "activity", label: "Activity", icon: "🧾", title: "Activity" },
+  { key: "categories", label: "Budgets", icon: "🏷️", title: "Categories" },
+  { key: "settings", label: "Settings", icon: "⚙️", title: "Settings" },
+];
+const VIEWS: InsightView[] = ["trends", "categories", "calendar", "merchants", "friends", "tips"];
 
-function Main({ onLock }: { onLock: () => void }) {
-  const { settings } = useApp();
-  const [tab, setTab] = useState<Tab>(tabFromHash);
-  const [pending, setPending] = useState<Transaction[]>([]);
+function parseHash(): { tab: Tab; view: InsightView } {
+  const [t, v] = location.hash.replace(/^#\/?/, "").split("/");
+  const tab = (TABS.some((x) => x.key === t) ? t : "home") as Tab;
+  const view = (VIEWS.includes(v as InsightView) ? v : "trends") as InsightView;
+  return { tab, view };
+}
+
+function Main() {
+  const { pending, arrived, clearArrived, toast } = useStore();
+  const [{ tab, view }, setRoute] = useState(parseHash);
   const [reviewing, setReviewing] = useState<Transaction[] | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const lastCount = useRef<number | null>(null);
-  const reviewingRef = useRef(false);
-  reviewingRef.current = reviewing !== null;
+  // Bumped to ask for the review pop-ups; the effect reads `pending` after the data has updated.
+  const [reviewRequest, setReviewRequest] = useState(0);
+  const requestReview = useCallback(() => setReviewRequest((n) => n + 1), []);
+  const autoOpened = useRef(false);
 
-  const loadPending = useCallback(async (autoOpen: boolean) => {
-    try {
-      const list = await api<Transaction[]>("/pending");
-      setPending(list);
-      // New transactions pop up on their own when you open (or come back to) the app.
-      const grew = lastCount.current === null ? list.length > 0 : list.length > lastCount.current;
-      if (autoOpen && grew && !reviewingRef.current) setReviewing(list);
-      lastCount.current = list.length;
-    } catch {
-      /* offline or locked; the next refresh will retry */
+  useEffect(() => {
+    if (reviewRequest > 0) setReviewing((cur) => cur ?? (pending.length ? pending : null));
+  }, [reviewRequest]);
+
+  // Pop-ups open by themselves when you open the app and something is waiting.
+  useEffect(() => {
+    if (!autoOpened.current && pending.length > 0) {
+      autoOpened.current = true;
+      requestReview();
     }
-  }, []);
+  }, [pending.length, requestReview]);
+
+  // Messages handed over by the iPhone Shortcut.
+  useEffect(() => {
+    if (!arrived) return;
+    const n = arrived.filter((r) => r.status === "queued").length;
+    const skipped = arrived.length - n;
+    clearArrived();
+    if (n > 0) requestReview();
+    else toast(skipped ? `Nothing new (${skipped} message${skipped > 1 ? "s" : ""} skipped or already added)` : "No new messages");
+  }, [arrived, clearArrived, requestReview, toast]);
 
   useEffect(() => {
-    void loadPending(true);
-    const onVisible = () => document.visibilityState === "visible" && void loadPending(true);
-    document.addEventListener("visibilitychange", onVisible);
-    const timer = window.setInterval(() => document.visibilityState === "visible" && void loadPending(true), 30_000);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      window.clearInterval(timer);
-    };
-  }, [loadPending]);
-
-  useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => setRoute(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  const go = (t: Tab) => {
-    location.hash = t === "home" ? "" : `/${t}`;
-    setTab(t);
+  const nav: Nav = useCallback((t, v) => {
+    const hash = t === "home" ? "" : t === "insights" ? `#/insights/${v ?? "trends"}` : `#/${t}`;
+    history.pushState(null, "", `${location.pathname}${hash}`);
+    setRoute({ tab: t, view: v ?? "trends" });
     window.scrollTo({ top: 0 });
-  };
+  }, []);
 
-  const changed = () => {
-    setRefreshKey((k) => k + 1);
-    void loadPending(false);
-  };
+  useEffect(() => {
+    const onPop = () => setRoute(parseHash());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const openReview = requestReview;
+  const current = TABS.find((t) => t.key === tab)!;
 
   return (
     <div className="app">
-      <header className="topbar">
-        <h1>{TITLES[tab]}</h1>
-        {tab === "home" && pending.length > 0 && (
-          <button className="btn sm primary" onClick={() => setReviewing(pending)}>
-            Review {pending.length}
-          </button>
-        )}
-      </header>
+      {tab !== "home" && (
+        <header className="topbar">
+          <h1>{current.title}</h1>
+          {pending.length > 0 && (
+            <button className="btn sm primary" onClick={openReview}>Review {pending.length}</button>
+          )}
+        </header>
+      )}
 
-      {tab === "home" && settings && (
-        <Dashboard pendingCount={pending.length} onReview={() => setReviewing(pending)} refreshKey={refreshKey} onChanged={changed} />
-      )}
-      {tab === "categories" && <Categories />}
-      {tab === "settings" && (
-        <SettingsPage
-          onLock={onLock}
-          onMessagesAdded={() => {
-            void loadPending(false);
-          }}
-        />
-      )}
+      {tab === "home" && <Home onReview={openReview} nav={nav} />}
+      {tab === "insights" && <Insights view={view} setView={(v) => nav("insights", v)} />}
+      {tab === "activity" && <Activity onReview={openReview} />}
+      {tab === "categories" && <CategoriesPage />}
+      {tab === "settings" && <SettingsPage onQueued={requestReview} />}
 
       <nav className="tabbar" aria-label="Main">
         <div className="tabbar-inner">
-          <button className="tab" aria-current={tab === "home" ? "page" : undefined} onClick={() => go("home")}>
-            <span className="ico" aria-hidden>🏠</span>Home
-            {pending.length > 0 && <span className="badge">{pending.length}</span>}
-          </button>
-          <button className="tab" aria-current={tab === "categories" ? "page" : undefined} onClick={() => go("categories")}>
-            <span className="ico" aria-hidden>🏷️</span>Categories
-          </button>
-          <button className="tab" aria-current={tab === "settings" ? "page" : undefined} onClick={() => go("settings")}>
-            <span className="ico" aria-hidden>⚙️</span>Settings
-          </button>
+          {TABS.map((t) => (
+            <button key={t.key} className="tab" aria-current={tab === t.key ? "page" : undefined} onClick={() => nav(t.key, t.key === "insights" ? view : undefined)}>
+              <span className="ico" aria-hidden>{t.icon}</span>
+              {t.label}
+              {t.key === "home" && pending.length > 0 && <span className="badge">{pending.length}</span>}
+            </button>
+          ))}
         </div>
       </nav>
 
-      {reviewing && (
-        <ReviewQueue
-          items={reviewing}
-          onClose={() => {
-            setReviewing(null);
-            changed();
-          }}
-          onChanged={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
+      {reviewing && <ReviewQueue items={reviewing} onClose={() => setReviewing(null)} />}
     </div>
   );
 }
 
+function Gate() {
+  const { ready, data } = useStore();
+  if (!ready) return <div className="splash"><img src="./icon.svg" alt="" /></div>;
+  if (!data.profile) return <Onboarding />;
+  return <Main />;
+}
+
 export function App() {
-  const [state, setState] = useState<"loading" | "setup" | "login" | "ready" | "error">("loading");
-
-  const check = useCallback(async () => {
-    try {
-      const s = await api<{ setup_done: boolean; authed: boolean }>("/status");
-      setState(!s.setup_done ? "setup" : s.authed && getToken() ? "ready" : "login");
-    } catch {
-      setState("error");
-    }
-  }, []);
-
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      setToken(null);
-      setState("login");
-    });
-    void check();
-  }, [check]);
-
-  const lock = async () => {
-    await api("/logout", { method: "POST" }).catch(() => {});
-    setToken(null);
-    setState("login");
-  };
-
-  if (state === "loading") return <div className="lock"><p className="muted">Loading…</p></div>;
-  if (state === "error")
-    return (
-      <div className="lock">
-        <p className="muted">Can't reach the server.</p>
-        <button className="btn primary" onClick={() => void check()}>Try again</button>
-      </div>
-    );
-  if (state === "setup" || state === "login") return <Lock mode={state} onUnlocked={() => setState("ready")} />;
   return (
-    <AppProvider>
-      <Main onLock={() => void lock()} />
-    </AppProvider>
+    <StoreProvider>
+      <Gate />
+    </StoreProvider>
   );
 }

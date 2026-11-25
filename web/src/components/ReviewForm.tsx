@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReviewInput, Transaction, TxnKind } from "../../../shared/types";
-import { api } from "../api";
-import { useApp } from "../context";
-import { currencySymbol, money, round2, when } from "../format";
+import { deleteTxn, ignoreTxn, reopenTxn, reviewTxn, ValidationError } from "../lib/actions";
+import { currencySymbol, money, round2, when } from "../lib/format";
+import { useStore } from "../store";
 import { CategoryPicker } from "./CategoryPicker";
 
 type SplitMode = "equal" | "amount" | "percent";
@@ -12,9 +12,9 @@ interface Props {
   mode: "review" | "edit";
   suggested?: string | null;
   onSaved: (t: Transaction) => void;
-  onIgnored?: (t: Transaction) => void;
+  onIgnored?: () => void;
   onSkip?: () => void;
-  onReopened?: (t: Transaction) => void;
+  onReopened?: () => void;
   onDeleted?: () => void;
 }
 
@@ -22,7 +22,14 @@ const splitNames = (s: string | null | undefined) =>
   (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 
 export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, onReopened, onDeleted }: Props) {
-  const { settings, people, splitwise, loadSplitwise, toast, reloadPeople } = useApp();
+  const { data, apply, toast } = useStore();
+  const people = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of [...data.transactions].reverse()) {
+      for (const n of splitNames(t.split_with)) if (!seen.has(n.toLowerCase())) seen.set(n.toLowerCase(), n);
+    }
+    return [...seen.values()].slice(0, 30);
+  }, [data.transactions]);
   const cur = txn.currency;
   const sym = currencySymbol(cur);
 
@@ -42,11 +49,6 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
   const [names, setNames] = useState<string[]>(splitNames(txn.split_with));
   const [nameInput, setNameInput] = useState("");
 
-  const swAvailable = !!settings?.splitwise_connected && !txn.splitwise_expense_id;
-  const [useSw, setUseSw] = useState(false);
-  const [swGroup, setSwGroup] = useState<number | null>(null);
-  const [swFriends, setSwFriends] = useState<number[]>([]);
-
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,13 +57,9 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
     if (mode === "review" && !txn.category_id) setCategoryId(suggested ?? null);
   }, [suggested, mode, txn.category_id]);
 
-  useEffect(() => {
-    if (useSw) void loadSplitwise().catch((e) => setError((e as Error).message));
-  }, [useSw, loadSplitwise]);
-
   const amount = Number(amountStr);
   const amountOk = Number.isFinite(amount) && amount > 0;
-  const effectivePeople = useSw && swFriends.length ? swFriends.length + 1 : peopleCount;
+  const effectivePeople = peopleCount;
 
   const myShare: number | null = useMemo(() => {
     if (!amountOk) return null;
@@ -74,12 +72,6 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
     const s = Number(shareStr);
     return shareStr.trim() !== "" && Number.isFinite(s) && s >= 0 && s <= amount ? round2(s) : null;
   }, [amountOk, amount, kind, splitMode, effectivePeople, pctStr, shareStr]);
-
-  const swGroupObj = splitwise?.groups.find((g) => g.id === swGroup) ?? null;
-  const swFriendList = useMemo(() => {
-    const all = splitwise?.friends ?? [];
-    return swGroupObj ? all.filter((f) => swGroupObj.member_ids.includes(f.id)) : all;
-  }, [splitwise, swGroupObj]);
 
   function addName(raw: string) {
     const parts = raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -97,31 +89,28 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
     setStep("details");
   }
 
-  async function ignore() {
-    setBusy(true);
+  function run(fn: () => void) {
     setError(null);
     try {
-      onIgnored?.(await api<Transaction>(`/transactions/${txn.id}/ignore`, { method: "POST" }));
+      fn();
     } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
+      setError(e instanceof ValidationError ? e.message : "Something went wrong.");
     }
   }
 
-  async function save() {
+  function ignore() {
+    run(() => {
+      apply((d) => ignoreTxn(d, txn.id));
+      onIgnored?.();
+    });
+  }
+
+  function save() {
     setError(null);
     if (!amountOk) return setError("Enter a valid amount.");
     if (kind === "personal" && !categoryId) return setError("Pick a category.");
     if (kind === "split" && myShare == null) return setError("Enter your share (between 0 and the full amount).");
-    if (useSw && !swFriends.length) return setError("Pick at least one Splitwise friend.");
-
-    let splitWith = names.concat(nameInput.trim() ? [nameInput.trim()] : []);
-    if (useSw && splitwise) {
-      const swNames = swFriends.map((id) => splitwise.friends.find((f) => f.id === id)?.name).filter(Boolean) as string[];
-      splitWith = [...new Set([...splitWith, ...swNames])];
-    }
-
+    const splitWith = names.concat(nameInput.trim() ? [nameInput.trim()] : []);
     const body: ReviewInput = {
       kind,
       category_id: categoryId,
@@ -130,41 +119,47 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
       my_share: kind === "split" ? myShare : null,
       split_with: kind === "split" ? splitWith.join(", ") : null,
       note: note.trim() || null,
-      splitwise: kind === "split" && useSw ? { group_id: swGroup, friend_ids: swFriends } : null,
     };
     setBusy(true);
-    try {
-      const saved = await api<Transaction>(`/transactions/${txn.id}/review`, { body });
-      if (kind === "split" && splitWith.length) void reloadPeople().catch(() => {});
-      if (saved.splitwise_expense_id && !txn.splitwise_expense_id) toast("Added to Splitwise ✓");
-      onSaved(saved);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    run(() => {
+      let saved: Transaction | undefined;
+      apply((d) => {
+        const next = reviewTxn(d, txn.id, body);
+        saved = next.transactions.find((t) => t.id === txn.id);
+        return next;
+      });
+      if (saved) onSaved(saved);
+    });
+    setBusy(false);
   }
 
-  async function reopen() {
-    setBusy(true);
-    try {
-      onReopened?.(await api<Transaction>(`/transactions/${txn.id}/reopen`, { method: "POST" }));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  function reopen() {
+    run(() => {
+      apply((d) => reopenTxn(d, txn.id));
+      onReopened?.();
+    });
   }
 
-  async function remove() {
+  function remove() {
     if (!confirm("Delete this expense? This can't be undone.")) return;
-    setBusy(true);
-    try {
-      await api(`/transactions/${txn.id}`, { method: "DELETE" });
+    run(() => {
+      apply((d) => deleteTxn(d, txn.id));
       onDeleted?.();
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
+    });
+  }
+
+  async function shareSplit() {
+    const owed = myShare != null && amountOk ? round2(amount - myShare) : 0;
+    const who = names.length ? names.join(", ") : "friends";
+    const text = `${merchant}: ${money(amount, cur)} on ${new Date(txn.received_at).toLocaleDateString()}. My share ${money(myShare ?? 0, cur)}, so ${who} owe${names.length === 1 ? "s" : ""} ${money(owed, cur)}${names.length > 1 ? ` (${money(round2(owed / names.length), cur)} each)` : ""}.`;
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else {
+        await navigator.clipboard.writeText(text);
+        toast("Copied. Paste it in Splitwise or a chat.");
+      }
+    } catch {
+      /* share sheet dismissed */
     }
   }
 
@@ -195,7 +190,6 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
             <div className="amount tnum">{amountOk ? money(amount, cur) : "—"}</div>
             <div className="meta">
               {when(txn.received_at)}
-              {txn.sender ? ` · ${txn.sender}` : ""}
             </div>
             <div className="row" style={{ justifyContent: "center", gap: 16, marginTop: 6 }}>
               <button className="linkbtn small" onClick={() => setEditingTop(true)}>Edit amount / merchant</button>
@@ -215,9 +209,9 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
           </button>
           <button className="choice" onClick={() => choose("split")}>
             <span className="emoji" aria-hidden>👥</span>
-            <span><strong>Me and friends</strong><small>I paid, but part of it is theirs (Splitwise)</small></span>
+            <span><strong>Me and friends</strong><small>I paid, but part of it is theirs</small></span>
           </button>
-          <button className="choice quiet" onClick={() => void ignore()} disabled={busy}>
+          <button className="choice quiet" onClick={ignore}>
             <span className="emoji" aria-hidden>🚫</span>
             <span><strong>Not an expense</strong><small>Transfer to my own account, refund, wrong message…</small></span>
           </button>
@@ -252,9 +246,7 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
                 {splitMode === "equal" && (
                   <div className="spread">
                     <span className="muted">People, including you</span>
-                    {useSw && swFriends.length ? (
-                      <strong>{effectivePeople}</strong>
-                    ) : (
+                    {(
                       <div className="stepper">
                         <button aria-label="Fewer people" onClick={() => setPeopleCount((c) => Math.max(2, c - 1))}>−</button>
                         <output aria-live="polite">{peopleCount}</output>
@@ -317,61 +309,11 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
                 </div>
               )}
 
-              {swAvailable && (
-                <>
-                  <hr className="sep" />
-                  <label className="spread" style={{ cursor: "pointer" }}>
-                    <span>
-                      <strong>Also add to Splitwise</strong>
-                      <br />
-                      <span className="small muted">You paid {amountOk ? money(amount, cur) : ""}; friends owe the rest</span>
-                    </span>
-                    <input type="checkbox" checked={useSw} onChange={(e) => setUseSw(e.target.checked)} style={{ width: 22, height: 22 }} />
-                  </label>
-                  {useSw && (
-                    <div style={{ marginTop: 12 }}>
-                      {!splitwise ? (
-                        <div className="muted small">Loading your Splitwise friends…</div>
-                      ) : splitwise.error ? (
-                        <div className="error">{splitwise.error}</div>
-                      ) : (
-                        <div className="stack">
-                          {splitwise.groups.length > 0 && (
-                            <select
-                              className="input"
-                              value={swGroup ?? ""}
-                              onChange={(e) => {
-                                setSwGroup(e.target.value ? Number(e.target.value) : null);
-                                setSwFriends([]);
-                              }}
-                              aria-label="Splitwise group"
-                            >
-                              <option value="">No group</option>
-                              {splitwise.groups.map((g) => (
-                                <option key={g.id} value={g.id}>{g.name}</option>
-                              ))}
-                            </select>
-                          )}
-                          <div className="chips">
-                            {swFriendList.map((f) => (
-                              <button
-                                key={f.id}
-                                className="chip"
-                                aria-pressed={swFriends.includes(f.id)}
-                                onClick={() => setSwFriends((p) => (p.includes(f.id) ? p.filter((x) => x !== f.id) : [...p, f.id]))}
-                              >
-                                {f.name}
-                              </button>
-                            ))}
-                            {swFriendList.length === 0 && <span className="muted small">No friends found{swGroupObj ? " in this group" : ""}.</span>}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </>
+              {myShare != null && amountOk && myShare < amount && (
+                <button type="button" className="linkbtn small" style={{ marginTop: 10 }} onClick={() => void shareSplit()}>
+                  📤 Send this split to friends / Splitwise
+                </button>
               )}
-              {txn.splitwise_expense_id && <p className="small muted" style={{ marginBottom: 0 }}>✓ Already on Splitwise</p>}
             </div>
           )}
 
@@ -388,19 +330,19 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
           {error && <div className="error">{error}</div>}
 
           <div className="sticky-actions">
-            <button className="btn primary block" disabled={busy} onClick={() => void save()}>
-              {busy ? "Saving…" : mode === "edit" ? "Save changes" : useSw ? "Save & add to Splitwise" : "Save"}
+            <button className="btn primary block" disabled={busy} onClick={save}>
+              {mode === "edit" ? "Save changes" : "Save"}
             </button>
             <div className="spread" style={{ marginTop: 8 }}>
               {mode === "review" ? (
                 <button className="linkbtn" onClick={() => setStep("who")}>‹ Back</button>
               ) : (
-                <button className="linkbtn" onClick={() => void reopen()} disabled={busy}>Move back to review</button>
+                <button className="linkbtn" onClick={reopen}>Move back to review</button>
               )}
               {mode === "review" && onSkip ? (
                 <button className="linkbtn" onClick={onSkip}>Skip for now</button>
               ) : mode === "edit" ? (
-                <button className="linkbtn" style={{ color: "var(--danger)" }} onClick={() => void remove()} disabled={busy}>Delete</button>
+                <button className="linkbtn" style={{ color: "var(--danger)" }} onClick={remove}>Delete</button>
               ) : (
                 <span />
               )}

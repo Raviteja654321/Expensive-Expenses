@@ -1,34 +1,35 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { Transaction } from "../../../shared/types";
-import { merchantKey } from "../../../shared/categorize";
-import { money } from "../format";
+import { suggestCategory } from "../lib/actions";
+import { money } from "../lib/format";
+import { useStore } from "../store";
 import { Modal } from "./Modal";
 import { ReviewForm } from "./ReviewForm";
 
 /** Shows each new transaction as its own pop-up, one after another. */
-export function ReviewQueue({ items, onClose, onChanged }: { items: Transaction[]; onClose: () => void; onChanged: () => void }) {
-  const [queue] = useState(items); // snapshot so the order doesn't jump while you review
+export function ReviewQueue({ items, onClose }: { items: Transaction[]; onClose: () => void }) {
+  const { data } = useStore();
+  const [queue] = useState(items); // snapshot, so the order doesn't jump while you review
   const [index, setIndex] = useState(0);
   const [stats, setStats] = useState({ saved: 0, ignored: 0, skipped: 0, mine: 0 });
-  // What you pick for a merchant now becomes the suggestion for its later transactions in this batch.
-  const [learned, setLearned] = useState<Record<string, string>>({});
 
-  const current = queue[index];
+  // Skip anything another tab already reviewed.
+  const live = queue[index] ? data.transactions.find((t) => t.id === queue[index].id) : undefined;
+  const current = live && live.status === "pending" ? live : undefined;
+  const stale = !!queue[index] && !current;
+  useEffect(() => {
+    if (stale) setIndex((i) => i + 1);
+  }, [stale]);
   const total = queue.length;
-  const suggested = useMemo(() => {
-    if (!current) return null;
-    return learned[merchantKey(current.merchant)] ?? current.suggested_category_id ?? null;
-  }, [current, learned]);
-
   const next = () => setIndex((i) => i + 1);
 
-  if (!current) {
+  if (index >= total) {
     const currency = queue[0]?.currency ?? "INR";
     return (
       <Modal title="All caught up" onClose={onClose}>
         <div className="empty">
           <div className="big">🎉</div>
-          <p style={{ fontSize: 18, fontWeight: 700, margin: "4px 0", color: "var(--text)" }}>
+          <p className="done-line">
             {stats.saved} saved{stats.ignored ? ` · ${stats.ignored} ignored` : ""}
             {stats.skipped ? ` · ${stats.skipped} skipped` : ""}
           </p>
@@ -39,6 +40,7 @@ export function ReviewQueue({ items, onClose, onChanged }: { items: Transaction[
       </Modal>
     );
   }
+  if (!current) return null;
 
   return (
     <Modal title={total > 1 ? `New transaction ${index + 1} of ${total}` : "New transaction"} onClose={onClose}>
@@ -53,16 +55,13 @@ export function ReviewQueue({ items, onClose, onChanged }: { items: Transaction[
         key={current.id}
         txn={current}
         mode="review"
-        suggested={suggested}
+        suggested={suggestCategory(data, current.merchant)}
         onSaved={(t) => {
-          if (t.category_id) setLearned((l) => ({ ...l, [merchantKey(t.merchant)]: t.category_id! }));
           setStats((s) => ({ ...s, saved: s.saved + 1, mine: s.mine + (t.my_share ?? t.amount) }));
-          onChanged();
           next();
         }}
         onIgnored={() => {
           setStats((s) => ({ ...s, ignored: s.ignored + 1 }));
-          onChanged();
           next();
         }}
         onSkip={() => {

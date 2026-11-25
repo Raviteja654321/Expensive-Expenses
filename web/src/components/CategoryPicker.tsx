@@ -1,35 +1,29 @@
 import { useState } from "react";
-import { useApp } from "../context";
+import { addCategory, ValidationError } from "../lib/actions";
+import { useStore } from "../store";
 
-export function CategoryPicker({
-  value,
-  suggested,
-  onChange,
-}: {
-  value: string | null;
-  suggested?: string | null;
-  onChange: (id: string | null) => void;
-}) {
-  const { categories, addCategory, toast } = useApp();
+export function CategoryPicker({ value, suggested, onChange }: { value: string | null; suggested?: string | null; onChange: (id: string | null) => void }) {
+  const { categories, apply, toast } = useStore();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("🏷️");
-  const [busy, setBusy] = useState(false);
 
-  async function add() {
+  function add() {
     if (!name.trim()) return;
-    setBusy(true);
     try {
-      const c = await addCategory(name.trim(), emoji.trim() || "🏷️");
-      onChange(c.id);
+      let created = "";
+      apply((d) => {
+        const r = addCategory(d, { name, emoji });
+        created = r.category.id;
+        return r.data;
+      });
+      onChange(created);
       setAdding(false);
       setName("");
       setEmoji("🏷️");
-      toast(`Added “${c.name}”`);
+      toast(`Added “${name.trim()}”`);
     } catch (e) {
-      toast((e as Error).message);
-    } finally {
-      setBusy(false);
+      toast(e instanceof ValidationError ? e.message : "Couldn't add that category.");
     }
   }
 
@@ -45,6 +39,7 @@ export function CategoryPicker({
             onClick={() => onChange(value === c.id ? null : c.id)}
             title={c.id === suggested ? "Suggested" : undefined}
           >
+            <span className="dot" style={{ background: `var(--c-${c.color})` }} aria-hidden />
             <span aria-hidden>{c.emoji}</span>
             {c.name}
           </button>
@@ -57,29 +52,19 @@ export function CategoryPicker({
       </div>
       {adding && (
         <div className="row" style={{ marginTop: 10 }}>
-          <input
-            className="input emoji-input"
-            value={emoji}
-            onChange={(e) => setEmoji(e.target.value)}
-            aria-label="Emoji"
-            maxLength={8}
-          />
+          <input className="input emoji-input" value={emoji} onChange={(e) => setEmoji(e.target.value)} aria-label="Emoji" maxLength={8} />
           <input
             className="input grow"
             value={name}
             autoFocus
             placeholder="e.g. Gifts"
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void add()}
+            onKeyDown={(e) => e.key === "Enter" && add()}
             aria-label="New category name"
             maxLength={40}
           />
-          <button type="button" className="btn primary" disabled={busy || !name.trim()} onClick={() => void add()}>
-            Add
-          </button>
-          <button type="button" className="iconbtn" onClick={() => setAdding(false)} aria-label="Cancel">
-            ✕
-          </button>
+          <button type="button" className="btn primary" disabled={!name.trim()} onClick={add}>Add</button>
+          <button type="button" className="iconbtn" onClick={() => setAdding(false)} aria-label="Cancel">✕</button>
         </div>
       )}
     </div>
