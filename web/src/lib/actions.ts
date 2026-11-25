@@ -239,7 +239,7 @@ export function addCategory(data: AppData, c: { name: string; emoji?: string; co
   if (!name) throw new ValidationError("Give the category a name.");
   if (data.categories.some((x) => x.name.toLowerCase() === name.toLowerCase())) throw new ValidationError(`“${name}” already exists.`);
   const used = new Set(data.categories.map((x) => x.color));
-  const color = c.color ?? (["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red"] as ColorKey[]).find((k) => !used.has(k)) ?? "gray";
+  const color = c.color ?? (["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red", "brown", "cyan", "lime", "indigo"] as ColorKey[]).find((k) => !used.has(k)) ?? "gray";
   const category: Category = {
     id: uid(),
     name,

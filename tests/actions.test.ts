@@ -99,7 +99,7 @@ describe("review + learning", () => {
   it("new categories get an unused palette color and duplicate names are refused", () => {
     const d = fresh();
     const { category } = addCategory(d, { name: "Gifts", emoji: "🎁" });
-    expect(category.color).toBe("gray"); // all 8 hues already used by the defaults
+    expect(category.color).toBe("cyan"); // first colour the defaults don't use
     expect(() => addCategory(d, { name: "food" })).toThrow(/exists/);
   });
 });

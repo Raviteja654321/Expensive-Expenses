@@ -5,6 +5,7 @@ import { mergeBackup, splitInbox, validateBackup, ValidationError, type IngestRe
 import { money } from "../lib/format";
 import { sampleInbox } from "../lib/samples";
 import { IphoneSetup } from "../components/IphoneSetup";
+import { importRows, previewCsv, type ImportPreview } from "../lib/importer";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "CAD", "AUD"];
 
@@ -53,6 +54,84 @@ function AddMessages({ onQueued }: { onQueued: () => void }) {
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function ImportCsv() {
+  const { apply, currency, toast } = useStore();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState("");
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [done, setDone] = useState<{ added: number; duplicates: number; created: string[]; renamed: [string, string][] } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const day = (s: string) => new Date(`${s.slice(0, 10)}T12:00`).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+  async function pick(file: File) {
+    setError(null);
+    setDone(null);
+    setName(file.name);
+    try {
+      setPreview(previewCsv(await file.text()));
+    } catch (e) {
+      setPreview(null);
+      setError(e instanceof ValidationError ? e.message : "Couldn't read that file. Is it a CSV?");
+    }
+  }
+
+  function run() {
+    if (!preview) return;
+    let summary: typeof done = null;
+    apply((d) => {
+      const r = importRows(d, preview.rows);
+      summary = { added: r.added, duplicates: r.duplicates, created: r.created, renamed: r.renamed };
+      return r.data;
+    });
+    setDone(summary);
+    setPreview(null);
+    if (summary) toast(`Imported ${(summary as { added: number }).added} expenses`);
+  }
+
+  return (
+    <div className="stack">
+      <p className="small muted" style={{ margin: 0 }}>
+        Bring in expenses from Notion, Google Sheets or Excel. They're added to what you already have; importing the same file twice won't double anything.
+      </p>
+      <details className="small">
+        <summary>How to export from Notion</summary>
+        <ol className="muted" style={{ paddingLeft: 18 }}>
+          <li>Open your expense database in Notion → <strong>•••</strong> → <strong>Export</strong>.</li>
+          <li>Format <strong>Markdown &amp; CSV</strong> → Export, then unzip and keep the <code>.csv</code> file.</li>
+          <li>Pick that file here. Columns named Date, Amount, Category and Expense (or Name) are detected automatically.</li>
+        </ol>
+      </details>
+      <button className="btn primary" onClick={() => fileRef.current?.click()}>📥 Choose a CSV file</button>
+      <input ref={fileRef} type="file" accept=".csv,text/csv,text/comma-separated-values" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void pick(f); }} />
+      {error && <div className="error">{error}</div>}
+      {preview && (
+        <div className="import-preview">
+          <strong>{name}</strong>
+          <ul className="small">
+            <li><b>{preview.rows.length.toLocaleString()}</b> expenses, {preview.from ? `${day(preview.from)} – ${day(preview.to!)}` : ""}</li>
+            <li>Total <b>{money(preview.total, currency)}</b></li>
+            <li>{preview.categories.length} categories: {preview.categories.slice(0, 8).join(", ")}{preview.categories.length > 8 ? "…" : ""}</li>
+            {preview.skipped > 0 && <li className="muted">{preview.skipped} row{preview.skipped > 1 ? "s" : ""} without an amount or date will be skipped</li>}
+            <li className="muted">Columns: {preview.columns.join(" · ")}</li>
+          </ul>
+          <div className="row">
+            <button className="btn primary" onClick={run}>Import {preview.rows.length.toLocaleString()} expenses</button>
+            <button className="btn" onClick={() => setPreview(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {done && (
+        <div className="success small">
+          ✓ Added <b>{done.added.toLocaleString()}</b> expense{done.added === 1 ? "" : "s"}
+          {done.duplicates ? `, ${done.duplicates.toLocaleString()} were already here` : ""}.
+          {done.created.length > 0 && <> New categories: {done.created.join(", ")}.</>}
+          {done.renamed.length > 0 && <> Renamed {done.renamed.map(([a, b]) => `${a} → ${b}`).join(", ")}.</>}
+        </div>
       )}
     </div>
   );
@@ -192,6 +271,11 @@ export function SettingsPage({ onQueued }: { onQueued: () => void }) {
       <div className="card">
         <h2>✍️ Add messages yourself</h2>
         <AddMessages onQueued={onQueued} />
+      </div>
+
+      <div className="card">
+        <h2>📥 Import from Notion or a spreadsheet</h2>
+        <ImportCsv />
       </div>
 
       <div className="card">

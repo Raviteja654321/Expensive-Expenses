@@ -9,7 +9,7 @@ export const DEFAULT_CATEGORIES: { name: string; emoji: string; color: ColorKey 
   { name: "Entertainment", emoji: "🎬", color: "violet" },
   { name: "Weekend", emoji: "🎉", color: "blue" },
   { name: "Health", emoji: "💊", color: "red" },
-  { name: "Bills", emoji: "🧾", color: "gray" },
+  { name: "Bills", emoji: "🧾", color: "brown" },
   { name: "Other", emoji: "📦", color: "gray" },
 ];
 

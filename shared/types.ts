@@ -3,8 +3,12 @@ export type TxnStatus = "pending" | "done" | "ignored";
 export type TxnKind = "personal" | "split";
 export type TxnSource = "shortcut" | "manual" | "sample" | "import";
 
-/** Keys into the validated chart palette (see styles.css: --c-<key>). */
-export const COLOR_KEYS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red", "gray"] as const;
+/**
+ * Category colours (see styles.css: --c-<key>). The first eight are the
+ * colour-blind-checked palette in its validated order; the next four give
+ * more categories their own colour (every chart also labels them by name).
+ */
+export const COLOR_KEYS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red", "brown", "cyan", "lime", "indigo", "gray"] as const;
 export type ColorKey = (typeof COLOR_KEYS)[number];
 
 export interface Category {
