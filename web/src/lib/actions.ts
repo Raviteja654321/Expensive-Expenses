@@ -151,11 +151,79 @@ export function ingestMessages(
       reviewed_at: null,
       settled: false,
     };
+    txn.dup_of = findDuplicate([...data.transactions, ...added], txn)?.id ?? null;
     added.push(txn);
     results.push({ text: preview, status: "queued", txn });
   }
   return { data: added.length ? { ...data, transactions: [...data.transactions, ...added] } : data, results };
 }
+
+// ---------- quick add & duplicates ----------
+
+const DUP_WINDOW_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * A quick add (typed in after paying with GPay/PhonePe) and a bank SMS for the
+ * same payment look alike: same amount, within a few hours, one of each kind.
+ * Two SMS with the same amount are NOT treated as duplicates (two ₹20 chais are real).
+ */
+export function findDuplicate(all: Transaction[], txn: Transaction): Transaction | null {
+  const at = Date.parse(txn.received_at);
+  const quick = txn.source === "quick";
+  let best: Transaction | null = null;
+  let bestGap = Infinity;
+  for (const t of all) {
+    if (t.id === txn.id || t.status === "ignored" || (t.source === "quick") === quick) continue;
+    if (Math.abs(t.amount - txn.amount) > 0.009) continue;
+    const gap = Math.abs(Date.parse(t.received_at) - at);
+    if (gap <= DUP_WINDOW_MS && gap < bestGap) {
+      best = t;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
+export function addManual(
+  data: AppData,
+  input: { amount: number; merchant: string; at?: string; via?: string | null },
+  now = new Date(),
+): { data: AppData; txn: Transaction } {
+  const amount = round2(Number(input.amount));
+  if (!Number.isFinite(amount) || amount <= 0) throw new ValidationError("Enter an amount more than zero.");
+  const merchant = input.merchant.trim().slice(0, 80) || "Payment";
+  const at = input.at && !Number.isNaN(Date.parse(input.at)) ? new Date(input.at).toISOString() : now.toISOString();
+  const via = input.via?.trim() || null;
+  const txn: Transaction = {
+    id: uid(),
+    hash: `quick:${uid()}`,
+    raw: `Added by you${via ? ` · paid with ${via}` : ""}`,
+    received_at: at,
+    amount,
+    currency: data.profile?.currency ?? "INR",
+    merchant,
+    direction: "debit",
+    status: "pending",
+    kind: null,
+    category_id: null,
+    my_share: null,
+    split_with: null,
+    note: via ? `Paid with ${via}` : null,
+    source: "quick",
+    created_at: now.toISOString(),
+    reviewed_at: null,
+    settled: false,
+  };
+  txn.dup_of = findDuplicate(data.transactions, txn)?.id ?? null;
+  return { data: { ...data, transactions: [...data.transactions, txn] }, txn };
+}
+
+/** "Yes, it's the same payment": drop this one, keep the other. */
+export const markDuplicate = (data: AppData, id: string, now = new Date()) =>
+  updateTxn(data, id, (t) => ({ ...t, status: "ignored", reviewed_at: now.toISOString(), note: "Duplicate of another entry" }));
+
+/** "No, they're different payments". */
+export const clearDuplicate = (data: AppData, id: string) => updateTxn(data, id, (t) => ({ ...t, dup_of: null }));
 
 // ---------- reviewing ----------
 

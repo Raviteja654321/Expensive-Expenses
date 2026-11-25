@@ -138,6 +138,37 @@ export function IphoneSetup() {
         <span className="small muted">Adds a ₹1 test transaction the same way your iPhone will.</span>
       </div>
 
+      <h3>Payments that don't send an SMS (GPay, PhonePe, SBI)</h3>
+      <p className="small muted">
+        iOS doesn't let any website or Shortcut read GPay or PhonePe. The next best thing: when you leave the payment app, this page opens a
+        quick form, and you type the amount and who you paid (about 5 seconds). If your bank texts you about it later anyway, the app notices
+        the match and asks before counting it twice.
+      </p>
+      <ol className="steps">
+        <li>Shortcuts → <strong>Automation</strong> → <kbd>+</kbd> → <strong>App</strong>.</li>
+        <li>Choose <strong>Google Pay</strong> and <strong>PhonePe</strong> (and Paytm or BHIM if you use them). Select <strong>Is Closed</strong> only, and <strong>Run Immediately</strong> → <strong>Next</strong>.</li>
+        <li>
+          <strong>New Blank Automation</strong> → add <strong>Open URLs</strong> with this link:
+          <CopyLine value={`${site}#quick`} />
+        </li>
+        <li>Tap <strong>Done</strong>. When you close the app without paying, just close the form.</li>
+      </ol>
+      <details className="small">
+        <summary>Why doesn't SBI text me every time?</summary>
+        <ul className="muted">
+          <li>
+            A common reason is <strong>UPI Lite</strong>: small payments come from a Lite balance on your phone, and banks don't send an SMS for
+            each one. Turning UPI Lite off in GPay/PhonePe makes every payment go through your account, which usually brings the SMS back.
+          </li>
+          <li>Some banks also skip SMS for small UPI amounts. Check your SBI app or net banking for SMS/email alert settings.</li>
+          <li>
+            If SBI emails you alerts, add a Shortcuts automation with the <strong>Email</strong> trigger (sender contains <code>sbi</code>) and the same
+            actions as the SMS one above, using the email's body instead of the message content.
+          </li>
+          <li>Either way, the GPay/PhonePe automation above catches what the bank doesn't tell you, and you can always tap <strong>＋ Add</strong>.</li>
+        </ul>
+      </details>
+
       <details className="small" style={{ marginTop: 14 }}>
         <summary>Sharing with friends</summary>
         <p className="muted">

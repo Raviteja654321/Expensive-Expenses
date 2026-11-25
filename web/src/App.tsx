@@ -3,6 +3,7 @@ import type { Transaction } from "../../shared/types";
 import { StoreProvider, useStore } from "./store";
 import { Onboarding } from "./components/Onboarding";
 import { ReviewQueue } from "./components/ReviewQueue";
+import { QuickAdd } from "./components/QuickAdd";
 import { Home } from "./pages/Home";
 import { Insights, type InsightView } from "./pages/Insights";
 import { Activity } from "./pages/Activity";
@@ -29,13 +30,33 @@ function parseHash(): { tab: Tab; view: InsightView } {
 }
 
 function Main() {
-  const { pending, arrived, clearArrived, toast } = useStore();
+  const { data, pending, arrived, clearArrived, toast } = useStore();
   const [{ tab, view }, setRoute] = useState(parseHash);
   const [reviewing, setReviewing] = useState<Transaction[] | null>(null);
   // Bumped to ask for the review pop-ups; the effect reads `pending` after the data has updated.
   const [reviewRequest, setReviewRequest] = useState(0);
   const requestReview = useCallback(() => setReviewRequest((n) => n + 1), []);
   const autoOpened = useRef(false);
+  const [quick, setQuick] = useState<{ via: string | null } | null>(null);
+
+  // "#quick" (from a GPay / PhonePe "app closed" automation) opens the add form.
+  useEffect(() => {
+    const check = () => {
+      const m = /^#quick(?:=([^&]*))?/.exec(location.hash);
+      if (!m) return;
+      history.replaceState(null, "", location.pathname);
+      let via: string | null = null;
+      try {
+        via = m[1] ? decodeURIComponent(m[1]) : null;
+      } catch {
+        via = m[1] ?? null;
+      }
+      setQuick({ via });
+    };
+    check();
+    window.addEventListener("hashchange", check);
+    return () => window.removeEventListener("hashchange", check);
+  }, []);
 
   useEffect(() => {
     if (reviewRequest > 0) setReviewing((cur) => cur ?? (pending.length ? pending : null));
@@ -83,14 +104,15 @@ function Main() {
 
   return (
     <div className="app">
-      {tab !== "home" && (
-        <header className="topbar">
-          <h1>{current.title}</h1>
+      <header className="topbar">
+        <h1>{tab === "home" ? `Hi${data.profile?.name ? `, ${data.profile.name}` : ""}` : current.title}</h1>
+        <div className="row">
           {pending.length > 0 && (
-            <button className="btn sm primary" onClick={openReview}>Review {pending.length}</button>
+            <button className="btn sm" onClick={openReview}>Review {pending.length}</button>
           )}
-        </header>
-      )}
+          <button className="btn sm primary" onClick={() => setQuick({ via: null })} aria-label="Add an expense">＋ Add</button>
+        </div>
+      </header>
 
       {tab === "home" && <Home onReview={openReview} nav={nav} />}
       {tab === "insights" && <Insights view={view} setView={(v) => nav("insights", v)} />}
@@ -111,6 +133,16 @@ function Main() {
       </nav>
 
       {reviewing && <ReviewQueue items={reviewing} onClose={() => setReviewing(null)} />}
+      {quick && (
+        <QuickAdd
+          via={quick.via}
+          onClose={() => setQuick(null)}
+          onAdded={(t) => {
+            setQuick(null);
+            setReviewing([t]);
+          }}
+        />
+      )}
     </div>
   );
 }

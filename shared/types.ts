@@ -1,7 +1,7 @@
 export type Direction = "debit" | "credit" | "unknown";
 export type TxnStatus = "pending" | "done" | "ignored";
 export type TxnKind = "personal" | "split";
-export type TxnSource = "shortcut" | "manual" | "sample" | "import";
+export type TxnSource = "shortcut" | "manual" | "quick" | "sample" | "import";
 
 /**
  * Category colours (see styles.css: --c-<key>). The first eight are the
@@ -41,6 +41,8 @@ export interface Transaction {
   reviewed_at: string | null;
   /** For splits: friends have paid you back. */
   settled: boolean;
+  /** Set when this looks like the same payment as another transaction (e.g. a quick add and its later bank SMS). */
+  dup_of?: string | null;
 }
 
 export interface Profile {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReviewInput, Transaction, TxnKind } from "../../../shared/types";
-import { deleteTxn, ignoreTxn, reopenTxn, reviewTxn, ValidationError } from "../lib/actions";
+import { clearDuplicate, deleteTxn, ignoreTxn, markDuplicate, reopenTxn, reviewTxn, ValidationError } from "../lib/actions";
 import { currencySymbol, money, round2, when } from "../lib/format";
 import { useStore } from "../store";
 import { CategoryPicker } from "./CategoryPicker";
@@ -23,6 +23,7 @@ const splitNames = (s: string | null | undefined) =>
 
 export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, onReopened, onDeleted }: Props) {
   const { data, apply, toast } = useStore();
+  const dup = txn.dup_of ? data.transactions.find((t) => t.id === txn.dup_of && t.status !== "ignored") : undefined;
   const people = useMemo(() => {
     const seen = new Map<string, string>();
     for (const t of [...data.transactions].reverse()) {
@@ -199,6 +200,20 @@ export function ReviewForm({ txn, mode, suggested, onSaved, onIgnored, onSkip, o
         )}
         {showRaw && <div className="raw-sms">{txn.raw}</div>}
       </div>
+
+      {dup && mode === "review" && (
+        <div className="dup-banner">
+          <strong>Looks like a payment you already have</strong>
+          <span>
+            {dup.merchant} · {money(dup.amount, dup.currency)} · {when(dup.received_at)}
+            {dup.source === "quick" ? " (added by you)" : " (from a bank SMS)"}
+          </span>
+          <div className="row">
+            <button className="btn sm primary" onClick={() => run(() => { apply((d) => markDuplicate(d, txn.id)); onIgnored?.(); })}>Same payment, skip this</button>
+            <button className="btn sm" onClick={() => run(() => apply((d) => clearDuplicate(d, txn.id)))}>Different payment</button>
+          </div>
+        </div>
+      )}
 
       {step === "who" && (
         <div>

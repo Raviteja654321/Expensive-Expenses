@@ -128,3 +128,47 @@ describe("money", () => {
     expect(money(6.45, "USD")).toBe("$6.45");
   });
 });
+
+import { addManual, clearDuplicate, findDuplicate, markDuplicate } from "../web/src/lib/actions";
+
+describe("quick add (GPay / PhonePe) and duplicates", () => {
+  it("adds a pending expense typed in by hand", () => {
+    const { data, txn } = addManual(fresh(), { amount: 120, merchant: "Chai Point", via: "PhonePe" }, NOW);
+    expect([txn.status, txn.source, txn.amount, txn.merchant, txn.note]).toEqual(["pending", "quick", 120, "Chai Point", "Paid with PhonePe"]);
+    expect(data.transactions).toHaveLength(1);
+    expect(() => addManual(fresh(), { amount: 0, merchant: "x" })).toThrow();
+  });
+
+  it("flags the bank SMS that arrives later for the same quick-added payment", () => {
+    let d = addManual(fresh(), { amount: 349, merchant: "Dominos", at: new Date(2026, 10, 25, 19, 0).toISOString() }, NOW).data;
+    const quick = d.transactions[0];
+    d = ingestMessages(d, [{ text: "Rs 349.00 debited to DOMINOS PIZZA", at: new Date(2026, 10, 25, 19, 4).toISOString() }], "shortcut", NOW).data;
+    const sms = d.transactions[1];
+    expect(sms.dup_of).toBe(quick.id);
+    d = markDuplicate(d, sms.id);
+    expect(d.transactions[1].status).toBe("ignored");
+  });
+
+  it("flags a quick add made after the SMS, too", () => {
+    let d = ingestMessages(fresh(), [{ text: "Rs 349.00 debited to DOMINOS", at: new Date(2026, 10, 25, 19, 0).toISOString() }], "shortcut", NOW).data;
+    const r = addManual(d, { amount: 349, merchant: "Dominos", at: new Date(2026, 10, 25, 20, 0).toISOString() }, NOW);
+    expect(r.txn.dup_of).toBe(d.transactions[0].id);
+    d = clearDuplicate(r.data, r.txn.id);
+    expect(d.transactions[1].dup_of).toBeNull();
+  });
+
+  it("does not flag two SMS with the same amount, or payments hours apart", () => {
+    const d = ingestMessages(
+      fresh(),
+      [
+        { text: "Rs 20 debited to CHAI ref 1", at: new Date(2026, 10, 25, 10, 0).toISOString() },
+        { text: "Rs 20 debited to CHAI ref 2", at: new Date(2026, 10, 25, 10, 5).toISOString() },
+      ],
+      "shortcut",
+      NOW,
+    ).data;
+    expect(d.transactions.map((t) => t.dup_of)).toEqual([null, null]);
+    const late = addManual(d, { amount: 20, merchant: "Chai", at: new Date(2026, 10, 25, 18, 0).toISOString() }, NOW);
+    expect(findDuplicate(d.transactions, late.txn)).toBeNull();
+  });
+});
