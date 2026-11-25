@@ -19,6 +19,11 @@ const cases: { name: string; sms: string; amount: number; currency: string | nul
     amount: 450, currency: "INR", merchant: "Zomato Ltd",
   },
   {
+    name: "ICICI credit card without a date",
+    sms: "INR 1,200.00 spent using ICICI Bank Card XX1234 on PVR INOX LTD. Avl Limit: INR 1,23,456.00. Ref 123456789012",
+    amount: 1200, currency: "INR", merchant: "PVR Inox Ltd",
+  },
+  {
     name: "ICICI UPI",
     sms: "ICICI Bank Acct XX123 debited for Rs 120.00 on 24-Nov-26; UBER INDIA credited. UPI:432112345678. Call 18002662 for dispute. SMS BLOCK 123 to 9215676766",
     amount: 120, currency: "INR", merchant: "Uber India",

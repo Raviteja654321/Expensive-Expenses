@@ -66,6 +66,7 @@ const MERCHANT_PATTERNS: RegExp[] = [
   /\binfo\s*[:\-]\s*(?:upi[\/\-])?(?:p2[ma][\/\-]\d+[\/\-])?([^\n]+?)(?:\.\s|\.$|\s+avl\b|\s+avbl\b|\s*\n|$)/gi,
   /\btransaction with\s+(.+?)\s+on\s/gi, // Chase
   /\bon\s+\d{1,2}[-\/ ]?[a-z]{3}[-\/ ]?\d{2,4}\s+(?:on|at)\s+(.+?)(?:\.\s|\.$|\s+avl\b|\n|$)/gi, // ICICI card
+  /\bcard\s+(?:no\.?\s*)?[x*]*\d{3,4}\s+(?:on|at)\s+(?!\d)(.+?)(?:\.\s|\.$|\s+avl\b|\s+on\b|\n|$)/gi, // "...Card XX1234 on MERCHANT."
   /;\s*(.+?)\s+credited\b/gi, // ICICI UPI: "; UBER INDIA credited"
   /\btrf to\s+(.+?)\s+(?:ref(?:no)?\b|on\b|upi\b)/gi, // SBI
   /\bat\s+(.+?)(?:\s+on\s|\s+on$|\s+was\b|\s+using\b|\s+via\b|\s+for\b|\.\s|\.$|,|\n|$)/gi,
