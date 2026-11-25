@@ -1,14 +1,16 @@
-export const DEFAULT_CATEGORIES: { name: string; emoji: string; color: string }[] = [
-  { name: "Food", emoji: "🍔", color: "#f97316" },
-  { name: "Groceries", emoji: "🛒", color: "#16a34a" },
-  { name: "Travel", emoji: "✈️", color: "#0ea5e9" },
-  { name: "Transport", emoji: "🚕", color: "#ca8a04" },
-  { name: "Shopping", emoji: "🛍️", color: "#db2777" },
-  { name: "Entertainment", emoji: "🎬", color: "#7c3aed" },
-  { name: "Weekend", emoji: "🎉", color: "#0d9488" },
-  { name: "Bills", emoji: "🧾", color: "#475569" },
-  { name: "Health", emoji: "💊", color: "#dc2626" },
-  { name: "Other", emoji: "📦", color: "#78716c" },
+import type { ColorKey } from "./types";
+
+export const DEFAULT_CATEGORIES: { name: string; emoji: string; color: ColorKey }[] = [
+  { name: "Food", emoji: "🍔", color: "orange" },
+  { name: "Groceries", emoji: "🛒", color: "green" },
+  { name: "Travel", emoji: "✈️", color: "aqua" },
+  { name: "Transport", emoji: "🚕", color: "yellow" },
+  { name: "Shopping", emoji: "🛍️", color: "magenta" },
+  { name: "Entertainment", emoji: "🎬", color: "violet" },
+  { name: "Weekend", emoji: "🎉", color: "blue" },
+  { name: "Health", emoji: "💊", color: "red" },
+  { name: "Bills", emoji: "🧾", color: "gray" },
+  { name: "Other", emoji: "📦", color: "gray" },
 ];
 
 /** Keyword hints used before the app has learned your own merchant → category choices. */

@@ -1,19 +1,26 @@
 export type Direction = "debit" | "credit" | "unknown";
 export type TxnStatus = "pending" | "done" | "ignored";
 export type TxnKind = "personal" | "split";
+export type TxnSource = "shortcut" | "manual" | "sample" | "import";
+
+/** Keys into the validated chart palette (see styles.css: --c-<key>). */
+export const COLOR_KEYS = ["blue", "orange", "aqua", "yellow", "magenta", "green", "violet", "red", "gray"] as const;
+export type ColorKey = (typeof COLOR_KEYS)[number];
 
 export interface Category {
   id: string;
   name: string;
   emoji: string;
-  color: string;
+  color: ColorKey;
+  /** Monthly budget in the main currency, or null for none. */
+  budget: number | null;
   sort: number;
 }
 
 export interface Transaction {
   id: string;
+  hash: string;
   raw: string;
-  sender: string | null;
   received_at: string; // ISO timestamp
   amount: number;
   currency: string;
@@ -24,38 +31,29 @@ export interface Transaction {
   category_id: string | null;
   my_share: number | null;
   split_with: string | null;
-  splitwise_expense_id: string | null;
   note: string | null;
-  source: string; // "shortcut" | "manual" | "sample"
+  source: TxnSource;
   created_at: string;
   reviewed_at: string | null;
-  /** Only present on pending items returned by the API. */
-  suggested_category_id?: string | null;
+  /** For splits: friends have paid you back. */
+  settled: boolean;
 }
 
-export interface Settings {
+export interface Profile {
+  name: string;
   currency: string;
-  ingest_token: string;
-  splitwise_connected: boolean;
+  theme: "auto" | "light" | "dark";
+  created_at: string;
 }
 
-export interface SplitwiseFriend {
-  id: number;
-  name: string;
-}
-
-export interface SplitwiseGroup {
-  id: number;
-  name: string;
-  member_ids: number[];
-}
-
-export interface SplitwiseMeta {
-  connected: boolean;
-  me?: { id: number; name: string; default_currency?: string };
-  friends: SplitwiseFriend[];
-  groups: SplitwiseGroup[];
-  error?: string;
+export interface AppData {
+  version: 1;
+  profile: Profile | null;
+  categories: Category[];
+  transactions: Transaction[];
+  /** merchantKey → category id, learned from your choices. */
+  rules: Record<string, string>;
+  last_backup_at: string | null;
 }
 
 export interface ReviewInput {
@@ -66,8 +64,4 @@ export interface ReviewInput {
   my_share?: number | null;
   split_with?: string | null;
   note?: string | null;
-  splitwise?: {
-    group_id: number | null;
-    friend_ids: number[];
-  } | null;
 }

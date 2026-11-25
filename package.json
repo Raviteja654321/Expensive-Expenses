@@ -2,28 +2,25 @@
   "name": "expensive-expenses",
   "version": "1.0.0",
   "private": true,
-  "description": "Turn bank SMS from your iPhone into categorized expenses and Splitwise splits.",
+  "description": "Turn bank SMS on your iPhone into categorized expenses, charts and budgets. Data stays on your device.",
   "type": "module",
   "scripts": {
-    "dev": "npm run build && wrangler dev",
-    "dev:web": "vite --config web/vite.config.ts",
+    "dev": "vite --config web/vite.config.ts",
     "build": "vite build --config web/vite.config.ts",
+    "preview": "vite preview --config web/vite.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit",
-    "test": "vitest run",
-    "deploy": "npm run build && wrangler deploy"
+    "test": "vitest run"
   },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20251125.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.8",
-    "vitest": "^4.1.12",
-    "wrangler": "^4.168.0"
+    "vitest": "^4.1.12"
   }
 }

@@ -71,3 +71,19 @@ export function shiftMonth(key: string, delta: number): string {
 }
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Compact money for chart axes: ₹1.2K, ₹3L (INR) / $1.2K, $3M. */
+export function moneyShort(n: number, currency = "INR"): string {
+  const sym = currencySymbol(currency);
+  const abs = Math.abs(n);
+  if (currency === "INR") {
+    if (abs >= 1e7) return `${sym}${+(n / 1e7).toFixed(1)}Cr`;
+    if (abs >= 1e5) return `${sym}${+(n / 1e5).toFixed(1)}L`;
+  } else if (abs >= 1e6) return `${sym}${+(n / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${sym}${+(n / 1e3).toFixed(1)}K`;
+  return `${sym}${Math.round(n)}`;
+}
+
+export function pct(n: number): string {
+  return `${Math.round(n)}%`;
+}
