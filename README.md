@@ -14,8 +14,9 @@ The app learns which category you use for each merchant and suggests it next tim
 
 | View | What it shows |
 |---|---|
-| **Home** | This month's total and change vs last month, today / last 7 days / daily average, budget meter, where the money went, top suggestions, recent expenses |
-| **Insights › Trends** | Daily spending (with average line), last 6 months, average by weekday |
+| **Home** | This month's total and change vs last month, today / last 7 days / daily average, budget meter, a pie chart of where the money went, top suggestions, recent expenses |
+| **Insights › Breakdown** | Pick any date range (this month, last month, last 30 days, last 3 months, this year, all time, or custom dates). A pie chart splits the spend by category; hover or tap a slice to see its amount, share and number of expenses. Also a colour-coded bar per category, and day-by-day or month-by-month stacked bars |
+| **Insights › Trends** | Daily spending and the last 6 months, stacked by category colour, plus average by weekday |
 | **Insights › Categories** | Your share per category with change vs last month and budget meters; tap one for its 6-month trend, top merchants and expenses |
 | **Insights › Calendar** | Spending heatmap for the month; tap a day to see what you bought |
 | **Insights › Merchants** | Where you spend most, how often, and your average spend there |
@@ -23,7 +24,8 @@ The app learns which category you use for each merchant and suggests it next tim
 | **Insights › Tips** | Suggestions: monthly pace, budget alerts, big category changes, frequent merchants, likely subscriptions, weekend share, small purchases, no-spend days |
 | **Activity** | Search and filter every expense (type, category, month, all time) and edit any of them |
 | **Budgets** | Categories with monthly budgets, colours, emoji and order |
-| **Settings** | iPhone setup, paste from clipboard, sample data, backup and restore, CSV export, theme (light, dark or auto) |
+| **Settings** | iPhone setup, paste from clipboard, sample data, **import from Notion or a spreadsheet (CSV)**, backup and restore, CSV export, theme (light, dark or auto) |
+| **＋ Add** (top right) | Type in a payment yourself, e.g. one made with GPay or PhonePe that your bank didn't text you about |
 
 ## How it gets your messages
 
@@ -35,6 +37,19 @@ The full step-by-step guide is in the app under **Settings → Connect your iPho
 - **Pop up right away**: the automation opens the app straight away with that one SMS (`…#add=<message>`).
 
 No setup at all? Copy a bank SMS and tap **Paste from clipboard**.
+
+### Payments without an SMS (GPay, PhonePe, UPI Lite, some SBI payments)
+
+iOS doesn't let a web page or Shortcut read GPay or PhonePe. Instead, an **App → Is Closed** automation for those apps opens `…#quick`, a short form for the amount and who you paid. If a bank SMS for the same payment arrives later (same amount, within 3 hours), the pop-up flags it and asks whether to skip it. Two SMS with the same amount are never flagged, because two ₹20 chais are both real.
+
+## Importing from Notion or a spreadsheet
+
+**Settings → Import** takes a CSV: Notion's *Export → Markdown & CSV*, or a Google Sheets or Excel CSV. It finds the Date, Amount, Category and Expense/Name columns, shows a preview, and merges the rows into your existing data:
+
+- When a row has several tags, the first becomes the category and the others go into the note.
+- Missing categories are created. The file's names win for synonyms (Transport → Transportation).
+- Merchant → category habits are learned from the import, so later SMS from the same places are pre-filled.
+- Importing the same file again adds nothing.
 
 What's kept: spends (debited / spent / sent / paid / charged…). OTPs, reminders ("will be debited"), UPI collect requests, money received, and texts without an amount are skipped. The same SMS arriving twice is stored once. Dates come from the Shortcut's timestamp, or from the date printed in the SMS.
 
@@ -52,7 +67,7 @@ React 19 + TypeScript + Vite, with hand-built SVG charts (no chart library). It 
 
 ```
 shared/            SMS parser + category hints (unit-tested)
-web/src/lib/       pure logic: import/review/backup actions, stats, insights
+web/src/lib/       pure logic: actions, CSV importer, date ranges, stats, insights
 web/src/store.tsx  React store over IndexedDB (db.ts), syncs open tabs
 web/src/pages/     Home, Insights, Activity, Budgets, Settings
 web/src/components charts/, review pop-ups, setup guide, onboarding
@@ -61,7 +76,7 @@ tests/             vitest suites
 
 ```bash
 npm install
-npm test           # 55 tests: parser, dates, import/review/backup, insights, formatting
+npm test           # 87 tests: parser, dates, import/review/backup, CSV import, quick add, ranges, insights
 npm run dev        # http://localhost:5173
 npm run build      # static site in web/dist
 ```
