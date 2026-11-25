@@ -1,6 +1,6 @@
 import type { Category, Transaction } from "../../../shared/types";
 import { money, monthKey, round2 } from "./format";
-import { byCategory, byMerchant, expenses, friendBalances, inMonth, monthBounds, monthToDate, previousMonthKey, spendOf, sum } from "./stats";
+import { byCategory, byMerchant, expenses, friendBalances, inMonth, monthBounds, monthToDate, previousMonthKey, spendOf, sum, totalOwed } from "./stats";
 
 export type Tone = "warn" | "info" | "good";
 
@@ -34,7 +34,7 @@ export function buildInsights(all: Transaction[], categories: Category[], curren
 
   // 1. Pace for the month
   if (day >= 3 && total > 0) {
-    const projected = round2((total / day) * days);
+    const projected = Math.round((total / day) * days);
     const ch = changePct(projected, prevTotal);
     if (ch != null && Math.abs(ch) >= 10) {
       out.push({
@@ -46,7 +46,7 @@ export function buildInsights(all: Transaction[], categories: Category[], curren
         link: "trends",
       });
     } else if (prevTotal === 0) {
-      out.push({ id: "pace", icon: "🧮", title: `On pace for ${fmt(projected)} this month`, body: `Based on ${fmt(round2(total / day))} a day so far.`, tone: "info", link: "trends" });
+      out.push({ id: "pace", icon: "🧮", title: `On pace for ${fmt(projected)} this month`, body: `Based on ${fmt(Math.round(total / day))} a day so far.`, tone: "info", link: "trends" });
     }
   }
 
@@ -110,7 +110,7 @@ export function buildInsights(all: Transaction[], categories: Category[], curren
       id: "merchant",
       icon: "🔁",
       title: `${m.merchant}: ${m.count} times this month`,
-      body: `${fmt(m.total)} in total, about ${fmt(round2(m.total / m.count))} each time.`,
+      body: `${fmt(m.total)} in total, about ${fmt(Math.round(m.total / m.count))} each time.`,
       tone: "info",
       link: "merchants",
     });
@@ -147,8 +147,9 @@ export function buildInsights(all: Transaction[], categories: Category[], curren
   }
 
   // 6. Friends owe you
-  const friends = friendBalances(all.filter((t) => t.currency === currency));
-  const owed = round2(friends.reduce((s, f) => s + f.owed, 0));
+  const mine = all.filter((t) => t.currency === currency);
+  const friends = friendBalances(mine);
+  const owed = totalOwed(mine);
   if (owed > 0) {
     out.push({
       id: "owed",

@@ -91,7 +91,7 @@ export function ColumnChart({
           <g>
             <line x1={axisW} x2={width} y1={y(reference)} y2={y(reference)} className="ref" />
             {referenceLabel && (
-              <text x={width - 2} y={y(reference) - 4} className="axis ref-label" textAnchor="end">
+              <text x={axisW + 4} y={y(reference) - 5} className="axis ref-label" textAnchor="start">
                 {referenceLabel}
               </text>
             )}

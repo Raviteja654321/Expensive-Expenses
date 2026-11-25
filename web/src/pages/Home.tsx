@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useStore } from "../store";
 import { money, monthKey, monthLabel, round2 } from "../lib/format";
 import { buildInsights, type Insight } from "../lib/insights";
-import { byCategory, expenses, friendBalances, inMonth, monthBounds, monthToDate, previousMonthKey, sum } from "../lib/stats";
+import { byCategory, expenses, inMonth, monthBounds, monthToDate, previousMonthKey, sum, totalOwed } from "../lib/stats";
 import { sampleInbox } from "../lib/samples";
 import { splitInbox } from "../lib/actions";
 import { SegmentBar, type Segment } from "../components/charts/SegmentBar";
@@ -39,7 +39,7 @@ export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
     const parts: Segment[] = top.map((c) => ({ key: c.id, label: c.category?.name ?? "Uncategorized", value: c.total, color: c.category?.color ?? "gray" }));
     if (rest > 0) parts.push({ key: "rest", label: "Everything else", value: rest, color: "gray" });
     const budget = categories.reduce((a, c) => a + (c.budget ?? 0), 0);
-    const owed = round2(friendBalances(data.transactions.filter((t) => t.currency === currency)).reduce((a, f) => a + f.owed, 0));
+    const owed = totalOwed(data.transactions.filter((t) => t.currency === currency));
     const recent = [...list].sort((a, b) => b.received_at.localeCompare(a.received_at)).slice(0, 5);
     return { total, prevMtd, today, week, cats, top, rest, parts, budget, owed, recent, count: month.length };
   }, [data.transactions, categories, currency, key, day]);
@@ -88,7 +88,7 @@ export function Home({ onReview, nav }: { onReview: () => void; nav: Nav }) {
         <div className="hero-stats">
           <div><span>Today</span><strong>{money(s.today, currency)}</strong></div>
           <div><span>Last 7 days</span><strong>{money(s.week, currency)}</strong></div>
-          <div><span>Daily average</span><strong>{money(round2(s.total / day), currency)}</strong></div>
+          <div><span>Daily average</span><strong>{money(Math.round(s.total / day), currency)}</strong></div>
         </div>
       </section>
 

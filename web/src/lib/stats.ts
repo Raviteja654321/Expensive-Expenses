@@ -122,6 +122,15 @@ export function friendBalances(all: Transaction[]): FriendBalance[] {
   return [...map.values()].sort((a, b) => b.owed - a.owed);
 }
 
+/** Total friends owe you across unsettled splits (rounded once, not per friend). */
+export function totalOwed(all: Transaction[]): number {
+  return round2(
+    all
+      .filter((t) => t.status === "done" && t.kind === "split" && !t.settled)
+      .reduce((s, t) => s + Math.max(0, t.amount - (t.my_share ?? 0)), 0),
+  );
+}
+
 /** Spend in a month up to (and including) a given day of month. */
 export function monthToDate(list: Transaction[], key: string, uptoDay: number): number {
   return sum(list.filter((t) => inMonth(t, key) && new Date(t.received_at).getDate() <= uptoDay));

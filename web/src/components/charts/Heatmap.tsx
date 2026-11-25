@@ -24,7 +24,8 @@ export function Heatmap({
   const max = Math.max(0, ...values);
   const today = new Date();
   const isThisMonth = today.getFullYear() === year && today.getMonth() + 1 === month;
-  const level = (v: number) => (v <= 0 || max <= 0 ? 0 : Math.min(5, Math.ceil((v / max) * 5)));
+  // Square-root scale: one big day (a flight) shouldn't wash out every other day.
+  const level = (v: number) => (v <= 0 || max <= 0 ? 0 : Math.min(5, Math.max(1, Math.ceil(Math.sqrt(v / max) * 5))));
   const cells: (number | null)[] = [...Array(first).fill(null), ...values.map((_, i) => i + 1)];
   const shown = hover ?? selected ?? null;
 

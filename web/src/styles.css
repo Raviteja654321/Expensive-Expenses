@@ -864,7 +864,11 @@ label.field {
 }
 .chart .ref-label {
   fill: var(--text-2);
-  font-weight: 600;
+  font-weight: 650;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
 }
 .chart rect[role="button"]:focus {
   outline: none;

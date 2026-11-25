@@ -5,7 +5,7 @@ import { money, moneyShort, monthKey, monthLabel, round2 } from "../lib/format";
 import { buildInsights, type Insight } from "../lib/insights";
 import {
   byCategory, byMerchant, dailyTotals, expenses, friendBalances, inMonth, monthBounds, monthTotals, previousMonthKey, sum,
-  weekdayAverages, type CatTotal,
+  totalOwed, weekdayAverages, type CatTotal,
 } from "../lib/stats";
 import { settleFriend } from "../lib/actions";
 import { ColumnChart } from "../components/charts/ColumnChart";
@@ -78,12 +78,12 @@ function Trends({ list, month, monthList, fmt, currency }: { list: Transaction[]
   const isNow = month === monthKey();
   const elapsed = isNow ? new Date().getDate() : monthBounds(month).days;
   const total = sum(monthList);
-  const avg = round2(total / elapsed);
+  const avg = Math.round(total / elapsed);
   const biggestDay = daily.reduce((best, v, i) => (v > daily[best] ? i : best), 0);
   const noSpend = daily.slice(0, elapsed).filter((v) => v === 0).length;
   const months = monthTotals(list, month, 6);
   const weekday = weekdayAverages(list, isNow ? new Date() : new Date(y, m, 0, 23, 59));
-  const avgMonth = round2(months.reduce((a, b) => a + b.total, 0) / Math.max(1, months.filter((x) => x.total > 0).length));
+  const avgMonth = Math.round(months.reduce((a, b) => a + b.total, 0) / Math.max(1, months.filter((x) => x.total > 0).length));
 
   return (
     <>
@@ -211,7 +211,7 @@ function CategoryDetail({ cat, list, month, fmt, currency }: { cat: CatTotal; li
     <div className="stack">
       <div className="kpi-row">
         <div className="kpi"><span>{monthLabel(month)}</span><strong>{fmt(cat.total)}</strong></div>
-        <div className="kpi"><span>Average per expense</span><strong>{fmt(round2(cat.total / Math.max(1, cat.count)))}</strong></div>
+        <div className="kpi"><span>Average per expense</span><strong>{fmt(Math.round(cat.total / Math.max(1, cat.count)))}</strong></div>
       </div>
       <div className="card">
         <h2>Last 6 months</h2>
@@ -267,7 +267,7 @@ function MerchantsView({ monthList, fmt }: { monthList: Transaction[]; fmt: (n: 
             label: x.merchant,
             value: x.total,
             valueText: fmt(x.total),
-            sub: `${x.count} time${x.count === 1 ? "" : "s"} · avg ${fmt(round2(x.total / x.count))}`,
+            sub: `${x.count} time${x.count === 1 ? "" : "s"} · avg ${fmt(Math.round(x.total / x.count))}`,
             onClick: () => setOpen(x.merchant),
           }))}
         />
@@ -285,7 +285,7 @@ function MerchantsView({ monthList, fmt }: { monthList: Transaction[]; fmt: (n: 
 function FriendsView({ fmt }: { fmt: (n: number) => string }) {
   const { data, currency, apply, toast } = useStore();
   const friends = friendBalances(data.transactions.filter((t) => t.currency === currency));
-  const total = round2(friends.reduce((a, f) => a + f.owed, 0));
+  const total = totalOwed(data.transactions.filter((t) => t.currency === currency));
   const settledCount = data.transactions.filter((t) => t.kind === "split" && t.settled).length;
 
   async function remind(name: string, owed: number, splits: Transaction[]) {
