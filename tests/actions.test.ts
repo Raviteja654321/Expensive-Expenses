@@ -172,3 +172,38 @@ describe("quick add (GPay / PhonePe) and duplicates", () => {
     expect(findDuplicate(d.transactions, late.txn)).toBeNull();
   });
 });
+
+import { decodeBase64Utf8 } from "../web/src/lib/actions";
+
+describe("Base64 hand-off (#inbox64= / #add64=)", () => {
+  // What the Shortcut's "Base64 Encode" action produces: standard Base64 of the UTF-8 file.
+  const NodeBuffer = (globalThis as unknown as { Buffer: { from(s: string, e: string): { toString(e: string): string } } }).Buffer;
+  const b64 = (s: string) => NodeBuffer.from(s, "utf8").toString("base64");
+  const inbox =
+    "### 2026-11-24T18:30:00+05:30\nSent Rs.250.00 to rahul@okaxis on 24-11-26. Ref 1\n" +
+    "### \nYour JioHome bill ₹999 debited. Write to care@jio.com\n";
+
+  it("decodes UTF-8 (₹), @ signs and newlines, in standard or URL-safe form", () => {
+    expect(decodeBase64Utf8(b64(inbox))).toBe(inbox);
+    expect(decodeBase64Utf8(b64(inbox).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""))).toBe(inbox);
+  });
+
+  it("tolerates line breaks every 76 characters and percent-encoded padding", () => {
+    const wrapped = b64(inbox).replace(/(.{76})/g, "$1\n");
+    expect(decodeBase64Utf8(wrapped)).toBe(inbox);
+    expect(decodeBase64Utf8(b64(inbox).replace(/=/g, "%3D"))).toBe(inbox);
+  });
+
+  it("reads #inbox64= and #add64= links", () => {
+    expect(readInboxFromUrl("#inbox64=" + b64(inbox))).toBe(inbox);
+    expect(readInboxFromUrl("#add64=" + b64("Rs 20 debited to a@b"))).toBe("Rs 20 debited to a@b");
+    expect(readInboxFromUrl("#inbox64=@@not-base64@@")).toBe("");
+  });
+
+  it("imports both messages from a Base64 inbox", () => {
+    const text = readInboxFromUrl("#inbox64=" + b64(inbox))!;
+    const { results } = ingestMessages(fresh(), splitInbox(text), "shortcut", NOW);
+    expect(results.map((r) => r.status)).toEqual(["queued", "queued"]);
+    expect(results[0].txn!.merchant).toBe("Rahul");
+  });
+});

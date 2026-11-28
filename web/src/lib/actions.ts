@@ -72,14 +72,56 @@ export function splitInbox(text: string): IngestEntry[] {
     .filter((e) => e.text);
 }
 
-/** Reads `#inbox=…` / `#add=…` (or the same as query parameters) from a URL. */
+const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+/**
+ * Decodes Base64 (standard or URL-safe, any line breaks or stray spaces)
+ * into a UTF-8 string, without relying on browser APIs.
+ */
+export function decodeBase64Utf8(input: string): string {
+  const clean = input
+    .replace(/%0[AD]|%20|\s/gi, "")
+    .replace(/%2B/gi, "+")
+    .replace(/%2F/gi, "/")
+    .replace(/%3D/gi, "=")
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .replace(/=+$/, "");
+  let bits = 0;
+  let value = 0;
+  let hex = "";
+  for (const ch of clean) {
+    const v = B64.indexOf(ch);
+    if (v < 0) throw new ValidationError("Not valid Base64.");
+    value = (value << 6) | v;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      hex += "%" + ((value >> bits) & 0xff).toString(16).padStart(2, "0");
+    }
+  }
+  return decodeURIComponent(hex);
+}
+
+/**
+ * Reads the messages an iPhone Shortcut put in the link:
+ * `#inbox64=` / `#add64=` (Base64, recommended) or `#inbox=` / `#add=` (URL-encoded),
+ * also accepted as query parameters.
+ */
 export function readInboxFromUrl(hash: string, search = ""): string | null {
   const grab = (s: string) => {
-    const m = /(?:^|[#?&])(inbox|add)=([\s\S]*)/.exec(s);
+    const m = /(?:^|[#?&])(inbox64|add64|inbox|add)=([\s\S]*)/.exec(s);
     if (!m) return null;
     let raw = m[2];
-    const amp = raw.search(/&(?:inbox|add)=/);
+    const amp = raw.search(/&(?:inbox64|add64|inbox|add)=/);
     if (amp >= 0) raw = raw.slice(0, amp);
+    if (m[1].endsWith("64")) {
+      try {
+        return decodeBase64Utf8(raw);
+      } catch {
+        return "";
+      }
+    }
     try {
       return decodeURIComponent(raw);
     } catch {

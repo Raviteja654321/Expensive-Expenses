@@ -33,8 +33,10 @@ iOS doesn't let any website read the Messages app. A **Shortcuts automation** (b
 
 The full step-by-step guide is in the app under **Settings → Connect your iPhone**, with your link ready to copy. There are two styles:
 
-- **Collect, review later** (recommended): an automation (*Message contains "debited"*) appends each SMS to `expenses-inbox.txt` in iCloud Drive. A **Review Expenses** shortcut on your Home Screen opens the app with everything collected (`…#inbox=<messages>`) and clears the file.
-- **Pop up right away**: the automation opens the app straight away with that one SMS (`…#add=<message>`).
+- **Collect, review later** (recommended): an automation (*Message contains "debited"*) appends each SMS to `expenses-inbox.txt` in iCloud Drive. A **Review Expenses** shortcut on your Home Screen opens the app with everything collected (`…#inbox64=<Base64 of the file>`) and deletes the file.
+- **Pop up right away**: the automation opens the app straight away with that one SMS (`…#add64=<Base64 of the message>`).
+
+The messages are sent as **Base64** (with *Line Breaks: None*), not URL-encoded. iOS's *Open URLs* action scans its text for links, so a UPI ID or email address inside a URL-encoded message (`rahul@okaxis`, `care@jio.com`) is mistaken for a separate `mailto:` link, and the action fails with "missing a hostname". Base64 contains only letters, digits and `+ / =`. The older `#inbox=` / `#add=` links still work.
 
 No setup at all? Copy a bank SMS and tap **Paste from clipboard**.
 
@@ -76,7 +78,7 @@ tests/             vitest suites
 
 ```bash
 npm install
-npm test           # 87 tests: parser, dates, import/review/backup, CSV import, quick add, ranges, insights
+npm test           # 91 tests: parser, dates, import/review/backup, CSV import, quick add, ranges, insights
 npm run dev        # http://localhost:5173
 npm run build      # static site in web/dist
 ```

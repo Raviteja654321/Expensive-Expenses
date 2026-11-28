@@ -90,13 +90,21 @@ export function IphoneSetup() {
               <strong>Get File from Folder</strong>: folder <strong>Shortcuts</strong>, path <code>expenses-inbox.txt</code>. Turn off{" "}
               <em>Error If Not Found</em>.
             </li>
-            <li><strong>URL Encode</strong> the <em>File</em>.</li>
             <li>
-              <strong>Text</strong>: paste this, then insert <strong>URL Encoded Text</strong> right after it:
-              <CopyLine value={`${site}#inbox=`} />
+              <strong>Base64 Encode</strong> the <em>File</em>. Tap the <kbd>›</kbd> on the action and set <strong>Line Breaks</strong> to{" "}
+              <strong>None</strong>.
+              <span className="small muted"> (Not "URL Encode": iOS mistakes UPI IDs and emails in your messages for links, and fails with "missing a hostname".)</span>
+            </li>
+            <li>
+              <strong>Text</strong>: paste this, then insert <strong>Base64 Encoded</strong> right after it, with no space or new line:
+              <CopyLine value={`${site}#inbox64=`} />
             </li>
             <li><strong>Open URLs</strong> with that <em>Text</em>.</li>
-            <li><strong>Delete Files</strong>: the <em>File</em> from step 2, with <em>Confirm Before Deleting</em> off.</li>
+            <li>
+              <strong>Delete</strong> (Delete Files): it fills in <em>Text</em> by itself, which is wrong. Tap the blue <em>Text</em> →{" "}
+              <strong>Clear Variable</strong>, tap the empty field → <strong>Select Variable</strong>, then tap the blue <strong>File</strong> on the
+              first action (<em>Get file from Shortcuts</em>). No path needed.
+            </li>
             <li>Tap the shortcut's name → <strong>Add to Home Screen</strong>. Use this icon to open the app from now on: it brings in new messages first.</li>
           </ol>
         </>
@@ -109,10 +117,13 @@ export function IphoneSetup() {
               <strong>Message Contains</strong>: <code>debited</code>. Choose <strong>Run Immediately</strong> → <strong>Next</strong> →{" "}
               <strong>New Blank Automation</strong>.
             </li>
-            <li>Add <strong>URL Encode</strong>. Tap its input → <strong>Shortcut Input</strong> → tap it again → <strong>Content</strong>.</li>
             <li>
-              Add <strong>Text</strong>: paste this, then insert <strong>URL Encoded Text</strong> right after it:
-              <CopyLine value={`${site}#add=`} />
+              Add <strong>Base64 Encode</strong>. Tap its input → <strong>Shortcut Input</strong> → tap it again → <strong>Content</strong>. Tap the{" "}
+              <kbd>›</kbd> and set <strong>Line Breaks</strong> to <strong>None</strong>.
+            </li>
+            <li>
+              Add <strong>Text</strong>: paste this, then insert <strong>Base64 Encoded</strong> right after it, with no space:
+              <CopyLine value={`${site}#add64=`} />
             </li>
             <li>Add <strong>Open URLs</strong> with that <em>Text</em>. Tap <strong>Done</strong>.</li>
             <li>Repeat for <code>spent</code> and <code>Sent Rs</code>.</li>
@@ -184,6 +195,11 @@ export function IphoneSetup() {
           <li>The automation must be set to <strong>Run Immediately</strong>.</li>
           <li>The first run may ask to allow access to the file or to open Safari. Choose <strong>Always Allow</strong>.</li>
           <li>Check the <em>Text</em> action uses <em>Shortcut Input → Content</em>, not the whole message.</li>
+          <li>
+            <em>"The URL mailto:… is missing a hostname"</em>: replace <strong>URL Encode</strong> with <strong>Base64 Encode</strong> (Line Breaks:
+            None) and use the <code>#inbox64=</code> / <code>#add64=</code> link above.
+          </li>
+          <li>If the shortcut stops with an error, nothing is deleted, so your collected messages are safe. Fix it and run it again.</li>
           <li>You can always copy a bank SMS and use <strong>Paste from clipboard</strong> below.</li>
         </ul>
       </details>
